@@ -31,7 +31,8 @@
       "name": "verify-apply-ui",
       "status": "completed",
       "started_at": "2026-07-24T18:03:50+0900",
-      "summary": "prepare→execute→검증 diff→approve→apply UI 상태 전이를 완성하고 AC-9 검증 diff 전용 표시·AC-10 무승인 apply 차단·AC-12 frozen argv 사전 공개 테스트를 통과했다."
+      "summary": "prepare→execute→검증 diff→approve→apply UI 상태 전이를 완성하고 AC-9 검증 diff 전용 표시·AC-10 무승인 apply 차단·AC-12 frozen argv 사전 공개 테스트를 통과했다.",
+      "completed_at": "2026-07-24T18:10:03+0900"
     },
     {
       "step": 4,
