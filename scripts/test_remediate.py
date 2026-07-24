@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -635,3 +636,141 @@ def test_rule_cycle_cap_writes_escalation_and_returns_nonzero(tmp_path):
     manifest = remediate.load_manifest(tmp_path, "0-mvp")
     assert manifest is not None
     assert manifest["state"] == "escalated"
+
+
+def test_real_two_review_cycle_reaches_ready_with_deferred_routing(tmp_path):
+    manifest = ingest_fixture(tmp_path)
+    assert len(manifest["findings"]) == 5
+    assert all(
+        finding["state"] == "unresolved" for finding in manifest["findings"]
+    )
+
+    write_triage(
+        tmp_path,
+        {
+            "F-001": {
+                "category": "contract_violation",
+                "evidence": "verify.ts의 양성 error 분류가 AC-7b 계약을 위반",
+            },
+            "F-002": {
+                "category": "implementation_bug",
+                "evidence": "verify.ts가 argv 공개 전에 게이트를 실행",
+            },
+            "F-003": {
+                "category": "test_gap",
+                "evidence": "verify.test.ts가 실제 vitest 파이프라인을 검증하지 않음",
+            },
+            "F-004": {
+                "category": "missing_feature",
+                "evidence": "사용자 주도 UI는 기존 엔진 결함이 아닌 미구현 범위",
+                "routedTo": "1-user-ui-slice",
+            },
+            "F-005": {
+                "category": "missing_feature",
+                "evidence": "argv preview UI는 별도 구현 단계 대상",
+                "routedTo": "1-argv-preview-ui",
+            },
+        },
+    )
+    assert remediate.cmd_apply_triage(tmp_path, "0-mvp", 1) == 0
+    manifest = remediate.load_manifest(tmp_path, "0-mvp")
+    assert manifest is not None
+    assert [
+        finding_by_id(manifest, finding_id)["state"]
+        for finding_id in ("F-001", "F-002", "F-003")
+    ] == ["accepted", "accepted", "accepted"]
+    assert [
+        finding_by_id(manifest, finding_id)["state"]
+        for finding_id in ("F-004", "F-005")
+    ] == ["deferred", "deferred"]
+
+    seed_fix_phase(tmp_path)
+    assert remediate.cmd_closure_packet(tmp_path, "0-mvp", 1) == 0
+    packet = (
+        tmp_path
+        / "remediation"
+        / "0-mvp"
+        / "cycle-1"
+        / "closure-packet.md"
+    ).read_text(encoding="utf-8")
+    assert all(
+        f"## {finding_id} " in packet
+        for finding_id in ("F-001", "F-002", "F-003")
+    )
+    assert "F-004" not in packet
+    assert "F-005" not in packet
+
+    assert (
+        remediate.cmd_ingest_closure(
+            tmp_path, "0-mvp", CLOSURE_FIXTURE, 1
+        )
+        == 0
+    )
+    assert remediate.cmd_rule(tmp_path, "0-mvp", 1) == 0
+
+    manifest = remediate.load_manifest(tmp_path, "0-mvp")
+    assert manifest is not None
+    ruling = read_ruling(tmp_path)
+    assert ruling["verdict"] == "Ready"
+    assert all(ruling["gates"].values())
+    for finding_id in ("F-001", "F-002", "F-003"):
+        finding = finding_by_id(manifest, finding_id)
+        assert finding["state"] == "resolved"
+        assert any(entry["by"] == "closure" for entry in finding["history"])
+    assert ruling["deferredToImplementation"] == [
+        {
+            "id": "F-004",
+            "title": "사용자 주도 UI vertical slice 미구현",
+            "routedTo": "1-user-ui-slice",
+        },
+        {
+            "id": "F-005",
+            "title": "argv preview UI 미구현",
+            "routedTo": "1-argv-preview-ui",
+        },
+    ]
+    assert not {
+        finding["id"]
+        for finding in manifest["findings"]
+        if finding["severity"] in {"blocker", "major"}
+        and finding["state"] in {"accepted", "unresolved"}
+    }
+    assert ruling["openFindings"] == []
+    assert manifest["state"] == "ready"
+
+
+def test_cli_ingest_and_status_smoke(tmp_path):
+    script = Path(__file__).parent / "remediate.py"
+    ingest = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "ingest",
+            "0-mvp",
+            str(REVIEW_FIXTURE),
+            "--root",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert ingest.returncode == 0, ingest.stderr
+    assert (tmp_path / "remediation" / "0-mvp" / "manifest.json").is_file()
+
+    status = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "status",
+            "0-mvp",
+            "--root",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert status.returncode == 0, status.stderr
+    assert "loop 0-mvp — triaging" in status.stdout
+    assert "F-001  major  -  unresolved" in status.stdout
