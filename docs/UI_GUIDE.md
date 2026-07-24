@@ -37,10 +37,14 @@
 색은 오직 의미에만. 브랜드 장식으로 쓰지 않는다.
 | 용도 | 값 |
 |------|------|
-| 통과 (VERIFY green, corroborated) | #22c55e |
-| 차단/위반 (VERIFY red) | #ef4444 |
-| tentative/emerging (`observed` tier) | #f59e0b |
-| 중립/기본 | #525252 |
+| VERIFY 통과 | #22c55e |
+| VERIFY 차단/위반 | #ef4444 |
+| tentative (`evidenceStatus: observed`) | #f59e0b |
+| 중립/기본 (`corroborated` 라벨 포함) | #525252 |
+
+> **두 축은 색을 공유하지 않는다.** green/red는 **VERIFY 결과 전용**이다. `evidenceStatus`는 텍스트 라벨로 표시하고 `corroborated`에는 중립색을 쓴다 — 근거가 충분하다는 뜻일 뿐 검증을 통과했다는 뜻이 아니다. `observed`만 주의를 끌기 위해 앰버를 쓴다. `capability`(`generative`/`descriptive`) 역시 색이 아니라 라벨로 구분한다.
+
+> ⚠️ **음성 검증에서 green은 실패다.** 게이트가 위반을 잡지 못한 것(`negative-not-caught`)이므로, 테스트 러너의 raw green을 그대로 green으로 칠하면 안 된다. 색은 러너의 출력이 아니라 **기대와의 일치 여부**를 따른다 — 양성 green = green, 음성 red = green, 음성 green = **red**.
 
 ## 컴포넌트
 ### 카드
