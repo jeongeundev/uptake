@@ -39,7 +39,7 @@
       "name": "acceptance-e2e",
       "status": "completed",
       "started_at": "2026-07-24T17:09:14+0900",
-      "completed_at": "2026-07-24T17:10:25+0900",
+      "completed_at": "2026-07-24T17:11:10+0900",
       "summary": "test_remediate.py e2e — 실제 review-1→triage(bug/contract/test=accepted, missing_feature=deferred)→closure-packet→review-2 ingest-closure(resolved)→rule=Ready(①), deferred 2건 라우팅 비차단(⑨). CLI 스모크(argparse 배선)"
     }
   ],
