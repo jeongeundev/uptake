@@ -21,6 +21,22 @@ def ingest_fixture(tmp_path: Path) -> dict:
     return manifest
 
 
+def write_triage(tmp_path: Path, decisions: dict, cycle: int = 1) -> Path:
+    path = tmp_path / "remediation" / "0-mvp" / f"cycle-{cycle}" / "triage.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"cycle": cycle, "decisions": decisions}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return path
+
+
+def finding_by_id(manifest: dict, finding_id: str) -> dict:
+    return next(
+        finding for finding in manifest["findings"] if finding["id"] == finding_id
+    )
+
+
 def test_ingest_creates_manifest_with_five_unresolved_findings(tmp_path):
     manifest = ingest_fixture(tmp_path)
 
@@ -94,3 +110,148 @@ def test_invalid_review_is_rejected_without_manifest_pollution(tmp_path):
 
     assert remediate.load_manifest(tmp_path, "0-mvp") is None
     assert not (tmp_path / "remediation" / "0-mvp" / "reviews").exists()
+
+
+def test_apply_triage_routes_categories_and_records_history(tmp_path):
+    ingest_fixture(tmp_path)
+    write_triage(
+        tmp_path,
+        {
+            "F-001": {"category": "contract_violation", "evidence": "AC-7b 위반"},
+            "F-002": {"category": "implementation_bug", "evidence": "실행 순서 위반"},
+            "F-003": {"category": "test_gap", "evidence": "통합 검증 부재"},
+            "F-004": {
+                "category": "missing_feature",
+                "evidence": "UI가 아직 미구현",
+                "routedTo": "1-user-ui-slice",
+            },
+            "F-005": {"category": "missing_feature", "evidence": "preview 미구현"},
+        },
+    )
+
+    assert remediate.cmd_apply_triage(tmp_path, "0-mvp", 1) == 0
+    manifest = remediate.load_manifest(tmp_path, "0-mvp")
+    assert manifest is not None
+    assert manifest["state"] == "remediating"
+    for finding_id in ("F-001", "F-002", "F-003"):
+        assert finding_by_id(manifest, finding_id)["state"] == "accepted"
+    for finding_id in ("F-004", "F-005"):
+        assert finding_by_id(manifest, finding_id)["state"] == "deferred"
+    assert finding_by_id(manifest, "F-004")["routedTo"] == "1-user-ui-slice"
+    assert all(
+        finding["history"][-1]["by"] == "triage"
+        for finding in manifest["findings"]
+    )
+
+
+@pytest.mark.parametrize(
+    "decision",
+    [
+        {"category": "contract_violation", "evidence": ""},
+        {"decision": "rejected", "evidence": ""},
+    ],
+)
+def test_apply_triage_requires_evidence_atomically(tmp_path, decision):
+    ingest_fixture(tmp_path)
+    manifest_path = tmp_path / "remediation" / "0-mvp" / "manifest.json"
+    before = manifest_path.read_bytes()
+    write_triage(
+        tmp_path,
+        {
+            "F-001": {"category": "contract_violation", "evidence": "유효한 근거"},
+            "F-002": decision,
+        },
+    )
+
+    with pytest.raises(ValueError, match="evidence"):
+        remediate.cmd_apply_triage(tmp_path, "0-mvp", 1)
+
+    assert manifest_path.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "decision",
+    [
+        {
+            "category": "implementation_bug",
+            "decision": "rejected",
+            "evidence": "근거",
+        },
+        {"evidence": "근거"},
+    ],
+)
+def test_apply_triage_requires_category_xor_decision(tmp_path, decision):
+    ingest_fixture(tmp_path)
+    write_triage(tmp_path, {"F-001": decision})
+
+    with pytest.raises(ValueError, match="exactly one"):
+        remediate.cmd_apply_triage(tmp_path, "0-mvp", 1)
+
+
+def test_apply_triage_routes_design_issue_to_requires_human(tmp_path):
+    ingest_fixture(tmp_path)
+    write_triage(
+        tmp_path,
+        {"F-001": {"category": "design_issue", "evidence": "새 ADR 필요"}},
+    )
+
+    assert remediate.cmd_apply_triage(tmp_path, "0-mvp", 1) == 0
+    manifest = remediate.load_manifest(tmp_path, "0-mvp")
+    assert manifest is not None
+    assert finding_by_id(manifest, "F-001")["state"] == "requires-human"
+
+
+def test_apply_triage_supports_rejected_and_duplicate(tmp_path):
+    ingest_fixture(tmp_path)
+    write_triage(
+        tmp_path,
+        {
+            "F-001": {"decision": "rejected", "evidence": "오탐 확인"},
+            "F-002": {
+                "decision": "duplicate",
+                "canonicalId": "F-001",
+                "evidence": "동일 원인",
+            },
+        },
+    )
+
+    assert remediate.cmd_apply_triage(tmp_path, "0-mvp", 1) == 0
+    manifest = remediate.load_manifest(tmp_path, "0-mvp")
+    assert manifest is not None
+    assert finding_by_id(manifest, "F-001")["state"] == "rejected"
+    duplicate = finding_by_id(manifest, "F-002")
+    assert duplicate["state"] == "duplicate"
+    assert duplicate["canonicalId"] == "F-001"
+
+
+def test_apply_triage_rejects_missing_duplicate_canonical(tmp_path):
+    ingest_fixture(tmp_path)
+    write_triage(
+        tmp_path,
+        {
+            "F-001": {
+                "decision": "duplicate",
+                "canonicalId": "F-999",
+                "evidence": "동일 원인",
+            }
+        },
+    )
+
+    with pytest.raises(ValueError, match="canonicalId"):
+        remediate.cmd_apply_triage(tmp_path, "0-mvp", 1)
+
+
+def test_apply_triage_only_accepts_unresolved_findings(tmp_path):
+    ingest_fixture(tmp_path)
+    write_triage(
+        tmp_path,
+        {"F-001": {"category": "implementation_bug", "evidence": "버그 확인"}},
+    )
+    assert remediate.cmd_apply_triage(tmp_path, "0-mvp", 1) == 0
+    write_triage(
+        tmp_path,
+        {"F-001": {"category": "implementation_bug", "evidence": "재분류 시도"}},
+    )
+
+    with pytest.raises(ValueError, match="unresolved"):
+        remediate.cmd_apply_triage(tmp_path, "0-mvp", 1)

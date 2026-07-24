@@ -13,7 +13,10 @@
     {
       "step": 1,
       "name": "triage",
-      "status": "pending"
+      "status": "completed",
+      "summary": "remediate.py apply-triage — triage.json 검증(evidence 필수·category XOR decision·unresolved만)·category→상태 라우팅(bug/contract/test→accepted, missing_feature→deferred, design_issue→requires-human)·history 기록. test: 라우팅·근거없음거부(원자성)·XOR·duplicate",
+      "started_at": "2026-07-24T17:00:32+0900",
+      "completed_at": "2026-07-24T17:02:38+0900"
     },
     {
       "step": 2,

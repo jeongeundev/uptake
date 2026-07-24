@@ -26,6 +26,12 @@ CATEGORIES = {
     "design_issue",
 }
 ACTIVE_STATES = {"unresolved", "accepted", "requires-human"}
+TRIAGE_DECISIONS = {"rejected", "duplicate"}
+ACCEPTED_CATEGORIES = {
+    "implementation_bug",
+    "contract_violation",
+    "test_gap",
+}
 
 
 def stamp() -> str:
@@ -259,6 +265,114 @@ def cmd_ingest(root: Path | str, loop_id: str, review_path: Path | str) -> int:
     return 0
 
 
+def cmd_apply_triage(root: Path | str, loop_id: str, cycle: int) -> int:
+    root = Path(root)
+    manifest = load_manifest(root, loop_id)
+    if manifest is None:
+        raise ValueError(f"manifest not found for loop '{loop_id}'")
+    if manifest["currentCycle"] != cycle:
+        raise ValueError(
+            f"cycle {cycle} does not match current cycle {manifest['currentCycle']}"
+        )
+
+    triage_path = (
+        root / "remediation" / loop_id / f"cycle-{cycle}" / "triage.json"
+    )
+    triage = json.loads(triage_path.read_text(encoding="utf-8"))
+    if not isinstance(triage, dict):
+        raise ValueError("triage: expected object")
+    if _require(triage, "cycle", "triage") != cycle:
+        raise ValueError(f"triage.cycle: expected {cycle}")
+    decisions = _require(triage, "decisions", "triage")
+    if not isinstance(decisions, dict):
+        raise ValueError("triage.decisions: expected object")
+
+    findings_by_id = {
+        finding["id"]: finding for finding in manifest["findings"]
+    }
+    validated = []
+    for finding_id, item in decisions.items():
+        context = f"triage.decisions[{finding_id!r}]"
+        if finding_id not in findings_by_id:
+            raise ValueError(f"{context}: finding does not exist")
+        if not isinstance(item, dict):
+            raise ValueError(f"{context}: expected object")
+
+        evidence = _require_string(item, "evidence", context)
+        if not evidence.strip():
+            raise ValueError(f"{context}.evidence: expected non-empty string")
+        has_category = "category" in item
+        has_decision = "decision" in item
+        if has_category == has_decision:
+            raise ValueError(
+                f"{context}: expected exactly one of category or decision"
+            )
+
+        finding = findings_by_id[finding_id]
+        if finding["state"] != "unresolved":
+            raise ValueError(
+                f"{context}: finding must be unresolved, got {finding['state']}"
+            )
+
+        category = item.get("category")
+        decision = item.get("decision")
+        canonical_id = None
+        routed_to = None
+        if has_category:
+            if category not in CATEGORIES:
+                raise ValueError(f"{context}.category: invalid value")
+            if category == "missing_feature" and "routedTo" in item:
+                routed_to = _require_string(item, "routedTo", context)
+        else:
+            if decision not in TRIAGE_DECISIONS:
+                raise ValueError(f"{context}.decision: invalid value")
+            if decision == "duplicate":
+                canonical_id = _require_string(item, "canonicalId", context)
+                if canonical_id not in findings_by_id:
+                    raise ValueError(
+                        f"{context}.canonicalId: finding does not exist"
+                    )
+
+        validated.append(
+            (finding, category, decision, canonical_id, routed_to, evidence)
+        )
+
+    accepted = False
+    for finding, category, decision, canonical_id, routed_to, evidence in validated:
+        if category in ACCEPTED_CATEGORIES:
+            new_state = "accepted"
+            accepted = True
+        elif category == "missing_feature":
+            new_state = "deferred"
+        elif category == "design_issue":
+            new_state = "requires-human"
+        else:
+            new_state = decision
+
+        finding["state"] = new_state
+        if category is not None:
+            finding["category"] = category
+        if routed_to is not None:
+            finding["routedTo"] = routed_to
+        if canonical_id is not None:
+            finding["canonicalId"] = canonical_id
+        finding["history"].append(
+            {
+                "cycle": cycle,
+                "from": "unresolved",
+                "to": new_state,
+                "by": "triage",
+                "evidence": evidence,
+                "at": stamp(),
+            }
+        )
+
+    if accepted:
+        manifest["state"] = "remediating"
+    save_manifest(root, loop_id, manifest)
+    return 0
+
+
 def cmd_status(root: Path | str, loop_id: str) -> int:
     manifest = load_manifest(root, loop_id)
     if manifest is None:
@@ -291,6 +405,11 @@ def build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("review_path", type=Path)
     ingest.add_argument("--root", type=Path, default=ROOT)
 
+    apply_triage = subparsers.add_parser("apply-triage")
+    apply_triage.add_argument("loop_id")
+    apply_triage.add_argument("--cycle", type=int, required=True)
+    apply_triage.add_argument("--root", type=Path, default=ROOT)
+
     status = subparsers.add_parser("status")
     status.add_argument("loop_id")
     status.add_argument("--root", type=Path, default=ROOT)
@@ -302,6 +421,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "ingest":
             return cmd_ingest(args.root, args.loop_id, args.review_path)
+        if args.command == "apply-triage":
+            return cmd_apply_triage(args.root, args.loop_id, args.cycle)
         return cmd_status(args.root, args.loop_id)
     except (OSError, ValueError, json.JSONDecodeError, KeyError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
