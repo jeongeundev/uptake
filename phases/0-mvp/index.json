@@ -69,7 +69,9 @@
     {
       "step": 8,
       "name": "apply",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-24T14:46:15+0900",
+      "summary": "src/lib/engine/apply.ts — applyGenerated(approval, files, targetRoot): 해시 재확인(diff-mismatch)·base 확인(base-changed)·승인결속(AC-10)·부분쓰기 롤백. hashGenerated 공유유틸(step7과 동일). ApprovalRecord=산출물해시+base해시+argv 결속. base는 .git 제외 전체 작업트리 경로·타입·내용 SHA-256. 세션/토큰·API route는 phase1 유예. AC-9/10 통과"
     }
   ],
   "created_at": "2026-07-24T14:18:02+0900"
