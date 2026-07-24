@@ -21,7 +21,9 @@
     {
       "step": 2,
       "name": "closure",
-      "status": "pending"
+      "status": "completed",
+      "summary": "remediate.py closure-packet(accepted만→cycle-N/closure-packet.md, 신규금지 안내)·ingest-closure(closure kind·신규ID거부·resolved는 accepted→resolved by:closure INV-3·still-open 유지). test: packet생성·resolved·still-open·신규거부·재발→requires-human(④)",
+      "started_at": "2026-07-24T17:03:15+0900"
     },
     {
       "step": 3,

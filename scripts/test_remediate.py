@@ -12,6 +12,12 @@ import remediate
 
 
 REVIEW_FIXTURE = Path(__file__).parent / "fixtures" / "remediation" / "review-1.json"
+CLOSURE_FIXTURE = (
+    Path(__file__).parent
+    / "fixtures"
+    / "remediation"
+    / "review-2-closure.json"
+)
 
 
 def ingest_fixture(tmp_path: Path) -> dict:
@@ -35,6 +41,44 @@ def finding_by_id(manifest: dict, finding_id: str) -> dict:
     return next(
         finding for finding in manifest["findings"] if finding["id"] == finding_id
     )
+
+
+def triage_fixture(tmp_path: Path) -> dict:
+    ingest_fixture(tmp_path)
+    write_triage(
+        tmp_path,
+        {
+            "F-001": {"category": "contract_violation", "evidence": "AC-7b 위반"},
+            "F-002": {"category": "implementation_bug", "evidence": "실행 순서 위반"},
+            "F-003": {"category": "test_gap", "evidence": "통합 검증 부재"},
+            "F-004": {"category": "missing_feature", "evidence": "UI 미구현"},
+            "F-005": {"category": "missing_feature", "evidence": "preview 미구현"},
+        },
+    )
+    assert remediate.cmd_apply_triage(tmp_path, "0-mvp", 1) == 0
+    manifest = remediate.load_manifest(tmp_path, "0-mvp")
+    assert manifest is not None
+    return manifest
+
+
+def write_closure_review(
+    tmp_path: Path,
+    verdicts: dict[str, str],
+    *,
+    review_id: str = "review-inline-closure",
+) -> Path:
+    review = json.loads(CLOSURE_FIXTURE.read_text(encoding="utf-8"))
+    review["reviewId"] = review_id
+    review["findings"] = [
+        finding
+        for finding in review["findings"]
+        if finding["id"] in verdicts
+    ]
+    for finding in review["findings"]:
+        finding["closureVerdict"] = verdicts[finding["id"]]
+    path = tmp_path / f"{review_id}.json"
+    path.write_text(json.dumps(review, ensure_ascii=False), encoding="utf-8")
+    return path
 
 
 def test_ingest_creates_manifest_with_five_unresolved_findings(tmp_path):
@@ -255,3 +299,130 @@ def test_apply_triage_only_accepts_unresolved_findings(tmp_path):
 
     with pytest.raises(ValueError, match="unresolved"):
         remediate.cmd_apply_triage(tmp_path, "0-mvp", 1)
+
+
+def test_closure_packet_contains_only_accepted_findings(tmp_path):
+    triage_fixture(tmp_path)
+
+    assert remediate.cmd_closure_packet(tmp_path, "0-mvp", 1) == 0
+
+    packet = (
+        tmp_path
+        / "remediation"
+        / "0-mvp"
+        / "cycle-1"
+        / "closure-packet.md"
+    ).read_text(encoding="utf-8")
+    for finding_id in ("F-001", "F-002", "F-003"):
+        assert f"## {finding_id} " in packet
+    assert "F-004" not in packet
+    assert "F-005" not in packet
+    assert "Verdict: [ ] resolved  [ ] still-open" in packet
+    assert "신규 finding을 여기서 제기하지 마라" in packet
+
+    manifest = remediate.load_manifest(tmp_path, "0-mvp")
+    assert manifest is not None
+    assert manifest["state"] == "closing"
+    assert manifest["cycles"] == [
+        {
+            "cycle": 1,
+            "fixPhase": "0-mvp-fix-c1",
+            "review": None,
+            "closureReview": None,
+            "verdict": None,
+            "reasons": [],
+        }
+    ]
+
+
+def test_ingest_closure_resolves_accepted_findings(tmp_path):
+    triage_fixture(tmp_path)
+    remediate.cmd_closure_packet(tmp_path, "0-mvp", 1)
+
+    assert (
+        remediate.cmd_ingest_closure(
+            tmp_path, "0-mvp", CLOSURE_FIXTURE, 1
+        )
+        == 0
+    )
+
+    manifest = remediate.load_manifest(tmp_path, "0-mvp")
+    assert manifest is not None
+    for finding_id in ("F-001", "F-002", "F-003"):
+        finding = finding_by_id(manifest, finding_id)
+        assert finding["state"] == "resolved"
+        assert finding["history"][-1]["by"] == "closure"
+    assert manifest["cycles"][0]["closureReview"] == "review-2"
+
+
+def test_ingest_closure_keeps_still_open_accepted(tmp_path):
+    triage_fixture(tmp_path)
+    remediate.cmd_closure_packet(tmp_path, "0-mvp", 1)
+    review_path = write_closure_review(
+        tmp_path,
+        {
+            "F-001": "still-open",
+            "F-002": "resolved",
+            "F-003": "resolved",
+        },
+    )
+
+    assert remediate.cmd_ingest_closure(
+        tmp_path, "0-mvp", review_path, 1
+    ) == 0
+
+    manifest = remediate.load_manifest(tmp_path, "0-mvp")
+    assert manifest is not None
+    still_open = finding_by_id(manifest, "F-001")
+    assert still_open["state"] == "accepted"
+    assert still_open["history"][-1]["from"] == "accepted"
+    assert still_open["history"][-1]["to"] == "accepted"
+    assert still_open["history"][-1]["evidence"].startswith("still-open:")
+    assert finding_by_id(manifest, "F-002")["state"] == "resolved"
+    assert finding_by_id(manifest, "F-003")["state"] == "resolved"
+
+
+def test_ingest_closure_rejects_new_finding(tmp_path):
+    triage_fixture(tmp_path)
+    remediate.cmd_closure_packet(tmp_path, "0-mvp", 1)
+    review = json.loads(CLOSURE_FIXTURE.read_text(encoding="utf-8"))
+    review["reviewId"] = "review-new-finding"
+    review["findings"][0]["id"] = "F-999"
+    review_path = tmp_path / "review-new-finding.json"
+    review_path.write_text(json.dumps(review, ensure_ascii=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="new finding"):
+        remediate.cmd_ingest_closure(tmp_path, "0-mvp", review_path, 1)
+
+
+def test_full_review_recurrence_requires_human(tmp_path):
+    triage_fixture(tmp_path)
+    remediate.cmd_closure_packet(tmp_path, "0-mvp", 1)
+    remediate.cmd_ingest_closure(tmp_path, "0-mvp", CLOSURE_FIXTURE, 1)
+    review = json.loads(REVIEW_FIXTURE.read_text(encoding="utf-8"))
+    review["reviewId"] = "review-recurrence"
+    review["round"] = 3
+    review["findings"] = [review["findings"][0]]
+    review_path = tmp_path / "review-recurrence.json"
+    review_path.write_text(json.dumps(review, ensure_ascii=False), encoding="utf-8")
+
+    assert remediate.cmd_ingest(tmp_path, "0-mvp", review_path) == 0
+
+    manifest = remediate.load_manifest(tmp_path, "0-mvp")
+    assert manifest is not None
+    finding = finding_by_id(manifest, "F-001")
+    assert finding["state"] == "requires-human"
+    assert finding["history"][-1]["from"] == "resolved"
+    assert finding["history"][-1]["by"] == "ingest"
+
+
+def test_ingest_closure_cannot_resolve_nonaccepted_finding(tmp_path):
+    ingest_fixture(tmp_path)
+    review_path = write_closure_review(
+        tmp_path,
+        {"F-001": "resolved"},
+        review_id="review-invalid-transition",
+    )
+
+    with pytest.raises(ValueError, match="accepted"):
+        remediate.cmd_ingest_closure(tmp_path, "0-mvp", review_path, 1)

@@ -373,6 +373,162 @@ def cmd_apply_triage(root: Path | str, loop_id: str, cycle: int) -> int:
     return 0
 
 
+def cmd_closure_packet(root: Path | str, loop_id: str, cycle: int) -> int:
+    root = Path(root)
+    manifest = load_manifest(root, loop_id)
+    if manifest is None:
+        raise ValueError(f"manifest not found for loop '{loop_id}'")
+    if manifest["currentCycle"] != cycle:
+        raise ValueError(
+            f"cycle {cycle} does not match current cycle {manifest['currentCycle']}"
+        )
+
+    accepted = [
+        finding
+        for finding in manifest["findings"]
+        if finding["state"] == "accepted"
+    ]
+    if not accepted:
+        raise ValueError("닫을 accepted finding 없음")
+
+    fix_phase = f"{loop_id}-fix-c{cycle}"
+    lines = [
+        f"# Closure Review — loop {loop_id}, cycle {cycle}",
+        "",
+        "아래 finding **만** 재검토한다. 신규 finding을 여기서 제기하지 마라(신규는 별도 full 리뷰).",
+        "각 finding마다 인용된 근거·스펙에 비추어 주장된 수정을 검증하고 verdict를 정하라.",
+        "",
+    ]
+    for finding in accepted:
+        claimed_fix = finding.get("remediationStep") or f"phases/{fix_phase}/"
+        specs = ", ".join(finding["specRefs"]) or "-"
+        files = ", ".join(finding["evidenceFiles"]) or "-"
+        lines.extend(
+            [
+                f"## {finding['id']} [{finding['severity']}] {finding['title']}",
+                f"- Spec: {specs}",
+                f"- 원문: {finding['detail']}",
+                f"- 주장된 수정: {claimed_fix}",
+                f"- 변경 파일: {files}",
+                f"- 검증 항목: {specs} 준수 및 회귀 테스트 통과 여부",
+                "- Verdict: [ ] resolved  [ ] still-open (사유: ___)",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## 출력",
+            f'review-{cycle + 1}.json (kind="closure")을 생성하라. 위 각 ID마다 finding 항목 1개,',
+            'severity 불변, closureVerdict ∈ {"resolved","still-open"}.',
+            "",
+        ]
+    )
+
+    cycle_directory = root / "remediation" / loop_id / f"cycle-{cycle}"
+    cycle_directory.mkdir(parents=True, exist_ok=True)
+    (cycle_directory / "closure-packet.md").write_text(
+        "\n".join(lines), encoding="utf-8"
+    )
+
+    if not any(item["cycle"] == cycle for item in manifest["cycles"]):
+        manifest["cycles"].append(
+            {
+                "cycle": cycle,
+                "fixPhase": fix_phase,
+                "review": None,
+                "closureReview": None,
+                "verdict": None,
+                "reasons": [],
+            }
+        )
+    manifest["state"] = "closing"
+    save_manifest(root, loop_id, manifest)
+    return 0
+
+
+def cmd_ingest_closure(
+    root: Path | str, loop_id: str, review_path: Path | str, cycle: int
+) -> int:
+    root = Path(root)
+    review_path = Path(review_path)
+    review = _validate_review(json.loads(review_path.read_text(encoding="utf-8")))
+    if review["kind"] != "closure":
+        raise ValueError("review.kind must be closure")
+
+    manifest = load_manifest(root, loop_id)
+    if manifest is None:
+        raise ValueError(f"manifest not found for loop '{loop_id}'")
+    if manifest["currentCycle"] != cycle:
+        raise ValueError(
+            f"cycle {cycle} does not match current cycle {manifest['currentCycle']}"
+        )
+    if manifest["target"] != review["target"]:
+        raise ValueError("review.target does not match existing manifest target")
+
+    findings_by_id = {
+        finding["id"]: finding for finding in manifest["findings"]
+    }
+    accepted_ids = {
+        finding["id"]
+        for finding in manifest["findings"]
+        if finding["state"] == "accepted"
+    }
+    reviewed_ids = [finding["id"] for finding in review["findings"]]
+    if len(reviewed_ids) != len(set(reviewed_ids)):
+        raise ValueError("closure review contains duplicate finding id")
+    new_ids = set(reviewed_ids) - set(findings_by_id)
+    if new_ids:
+        raise ValueError(
+            f"closure review contains new finding: {', '.join(sorted(new_ids))}"
+        )
+    nonaccepted_ids = set(reviewed_ids) - accepted_ids
+    if nonaccepted_ids:
+        raise ValueError(
+            "closure finding must be accepted: "
+            + ", ".join(sorted(nonaccepted_ids))
+        )
+    missing_ids = accepted_ids - set(reviewed_ids)
+    if missing_ids:
+        raise ValueError(
+            "closure review missing verdict for accepted finding: "
+            + ", ".join(sorted(missing_ids))
+        )
+
+    cycle_entry = next(
+        (item for item in manifest["cycles"] if item["cycle"] == cycle), None
+    )
+    if cycle_entry is None:
+        raise ValueError(f"closure packet not found for cycle {cycle}")
+
+    for reviewed_finding in review["findings"]:
+        finding = findings_by_id[reviewed_finding["id"]]
+        verdict = reviewed_finding["closureVerdict"]
+        new_state = "resolved" if verdict == "resolved" else "accepted"
+        evidence = reviewed_finding["detail"]
+        if verdict == "still-open":
+            evidence = f"still-open: {evidence}"
+        finding["state"] = new_state
+        finding["history"].append(
+            {
+                "cycle": cycle,
+                "from": "accepted",
+                "to": new_state,
+                "by": "closure",
+                "evidence": evidence,
+                "at": stamp(),
+            }
+        )
+
+    reviews_directory = root / "remediation" / loop_id / "reviews"
+    reviews_directory.mkdir(parents=True, exist_ok=True)
+    preserved_review = reviews_directory / f"{review['reviewId']}.json"
+    if review_path.resolve() != preserved_review.resolve():
+        shutil.copyfile(review_path, preserved_review)
+    cycle_entry["closureReview"] = review["reviewId"]
+    save_manifest(root, loop_id, manifest)
+    return 0
+
+
 def cmd_status(root: Path | str, loop_id: str) -> int:
     manifest = load_manifest(root, loop_id)
     if manifest is None:
@@ -410,6 +566,17 @@ def build_parser() -> argparse.ArgumentParser:
     apply_triage.add_argument("--cycle", type=int, required=True)
     apply_triage.add_argument("--root", type=Path, default=ROOT)
 
+    closure_packet = subparsers.add_parser("closure-packet")
+    closure_packet.add_argument("loop_id")
+    closure_packet.add_argument("--cycle", type=int, required=True)
+    closure_packet.add_argument("--root", type=Path, default=ROOT)
+
+    ingest_closure = subparsers.add_parser("ingest-closure")
+    ingest_closure.add_argument("loop_id")
+    ingest_closure.add_argument("review_path", type=Path)
+    ingest_closure.add_argument("--cycle", type=int, required=True)
+    ingest_closure.add_argument("--root", type=Path, default=ROOT)
+
     status = subparsers.add_parser("status")
     status.add_argument("loop_id")
     status.add_argument("--root", type=Path, default=ROOT)
@@ -423,6 +590,12 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_ingest(args.root, args.loop_id, args.review_path)
         if args.command == "apply-triage":
             return cmd_apply_triage(args.root, args.loop_id, args.cycle)
+        if args.command == "closure-packet":
+            return cmd_closure_packet(args.root, args.loop_id, args.cycle)
+        if args.command == "ingest-closure":
+            return cmd_ingest_closure(
+                args.root, args.loop_id, args.review_path, args.cycle
+            )
         return cmd_status(args.root, args.loop_id)
     except (OSError, ValueError, json.JSONDecodeError, KeyError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
