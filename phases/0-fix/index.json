@@ -2,7 +2,18 @@
   "project": "uptake",
   "phase": "0-fix",
   "steps": [
-    { "step": 0, "name": "verify-contract", "status": "pending" },
-    { "step": 1, "name": "verify-integration", "status": "pending" }
-  ]
+    {
+      "step": 0,
+      "name": "verify-contract",
+      "status": "completed",
+      "summary": "verify.ts — verify()를 prepareVerification()/executeVerification()로 분리(argv 실행 전 공개, AC-12 재확인). 양성 error/timeout을 gate-error/timeout으로 분류(Major1/AC-7b). verify.test.ts 갱신+양성error·argv공개 회귀 테스트",
+      "started_at": "2026-07-24T15:41:18+0900"
+    },
+    {
+      "step": 1,
+      "name": "verify-integration",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-07-24T15:41:18+0900"
 }

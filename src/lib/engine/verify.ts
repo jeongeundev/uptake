@@ -28,7 +28,21 @@ import {
 } from "@/services/gate-runner";
 import type { InstantiatedInjection, Pattern } from "@/types/pattern";
 
-type Generated = Extract<InstantiateResult, { ok: true }>;
+export type Generated = Extract<InstantiateResult, { ok: true }>;
+
+export type PreparedVerification = {
+  status: "prepared";
+  frozenArgv: string[];
+  generated: Generated;
+  gateTestId: string;
+  bindings: BindingDetection[];
+  targetRepoRoot: string;
+};
+
+export type PrepareRejected = {
+  status: "positive-failed";
+  detail: string;
+};
 
 export type VerifyOutcome =
   | {
@@ -188,15 +202,12 @@ export function hashGenerated(files: GeneratedFile[]): string {
   return hash.digest("hex");
 }
 
-export async function verify(
+export function prepareVerification(
   pattern: Pattern,
   generated: Generated,
   bindings: BindingDetection[],
   targetRepoRoot: string,
-): Promise<VerifyOutcome> {
-  let positiveWorkspace: string | undefined;
-  let negativeWorkspace: string | undefined;
-  let frozenArgv: string[];
+): PreparedVerification | PrepareRejected {
   const gateTestId = pattern.oracle?.gateTestId;
 
   if (gateTestId === undefined || gateTestId !== generated.gateTestId) {
@@ -207,11 +218,53 @@ export async function verify(
   }
 
   try {
-    frozenArgv = freezeArgv(generated, bindings);
+    return {
+      status: "prepared",
+      frozenArgv: freezeArgv(generated, bindings),
+      generated,
+      gateTestId,
+      bindings,
+      targetRepoRoot,
+    };
   } catch (error) {
     return {
       status: "positive-failed",
       detail: error instanceof Error ? error.message : "argv binding failed",
+    };
+  }
+}
+
+export async function executeVerification(
+  prepared: PreparedVerification,
+): Promise<VerifyOutcome> {
+  let positiveWorkspace: string | undefined;
+  let negativeWorkspace: string | undefined;
+  const {
+    bindings,
+    frozenArgv,
+    gateTestId,
+    generated,
+    targetRepoRoot,
+  } = prepared;
+
+  let recalculatedArgv: string[];
+  try {
+    recalculatedArgv = freezeArgv(generated, bindings);
+  } catch {
+    return {
+      status: "positive-failed",
+      detail: "prepared argv no longer matches generated output and bindings",
+      frozenArgv,
+    };
+  }
+  if (
+    recalculatedArgv.length !== frozenArgv.length ||
+    recalculatedArgv.some((value, index) => value !== frozenArgv[index])
+  ) {
+    return {
+      status: "positive-failed",
+      detail: "prepared argv no longer matches generated output and bindings",
+      frozenArgv,
     };
   }
 
@@ -225,16 +278,17 @@ export async function verify(
       positiveWorkspace,
       DEFAULT_GATE_TIMEOUT_MS,
     );
-    if (
-      positive.kind !== "ran" ||
-      positive.perTest[gateTestId] !== "passed"
-    ) {
+    if (positive.kind === "error") {
+      return {
+        status: errorStatus(positive),
+        detail: positive.detail,
+        frozenArgv,
+      };
+    }
+    if (positive.perTest[gateTestId] !== "passed") {
       return {
         status: "positive-failed",
-        detail:
-          positive.kind === "error"
-            ? positive.detail
-            : `gate test ${gateTestId} did not pass`,
+        detail: `gate test ${gateTestId} did not pass`,
         frozenArgv,
       };
     }

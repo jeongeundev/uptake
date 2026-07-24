@@ -7,7 +7,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { detectBindings } from "@/lib/engine/detect";
 import { instantiate } from "@/lib/engine/instantiate";
-import { hashGenerated, verify } from "@/lib/engine/verify";
+import {
+  executeVerification,
+  hashGenerated,
+  prepareVerification,
+  type PreparedVerification,
+} from "@/lib/engine/verify";
 import { runGate } from "@/services/gate-runner";
 import type { GateOutcome } from "@/services/gate-runner";
 import type { Pattern } from "@/types/pattern";
@@ -66,7 +71,29 @@ beforeEach(() => {
   mockedRunGate.mockReset();
 });
 
-describe("verify", () => {
+function prepare(): PreparedVerification {
+  const result = prepareVerification(
+    pattern,
+    instantiated,
+    bindings,
+    targetRoot,
+  );
+  if (result.status !== "prepared") {
+    throw new Error(`fixture preparation failed: ${result.detail}`);
+  }
+  return result;
+}
+
+describe("prepareVerification", () => {
+  it("returns frozen argv without running the gate", () => {
+    const prepared = prepare();
+
+    expect(prepared.frozenArgv).toEqual(expect.any(Array));
+    expect(mockedRunGate).not.toHaveBeenCalled();
+  });
+});
+
+describe("executeVerification", () => {
   it("keeps the target immutable and accepts positive pass plus negative fail", async () => {
     const before = targetSnapshot();
     const workspaces: string[] = [];
@@ -85,12 +112,7 @@ describe("verify", () => {
         : ran("failed", "/logs/negative.log");
     });
 
-    const outcome = await verify(
-      pattern,
-      instantiated,
-      bindings,
-      targetRoot,
-    );
+    const outcome = await executeVerification(prepare());
 
     expect(outcome).toEqual({
       status: "awaiting-approval",
@@ -109,12 +131,7 @@ describe("verify", () => {
       .mockResolvedValueOnce(ran("passed", "/logs/positive.log"))
       .mockResolvedValueOnce(ran("failed", "/logs/negative.log"));
 
-    const outcome = await verify(
-      pattern,
-      instantiated,
-      bindings,
-      targetRoot,
-    );
+    const outcome = await executeVerification(prepare());
 
     expect(mockedRunGate).toHaveBeenCalledTimes(2);
     const positiveArgv = mockedRunGate.mock.calls[0][0];
@@ -137,12 +154,16 @@ describe("verify", () => {
         : file,
     );
 
-    const outcome = await verify(
+    const prepared = prepareVerification(
       pattern,
       { ...instantiated, files },
       bindings,
       targetRoot,
     );
+    if (prepared.status !== "prepared") {
+      throw new Error(`fixture preparation failed: ${prepared.detail}`);
+    }
+    const outcome = await executeVerification(prepared);
 
     expect(outcome).toMatchObject({ status: "injection-failed" });
     expect(mockedRunGate).toHaveBeenCalledTimes(1);
@@ -153,7 +174,7 @@ describe("verify", () => {
       ran("passed", "/logs/positive.log"),
     );
 
-    const outcome = await verify(
+    const prepared = prepareVerification(
       pattern,
       {
         ...instantiated,
@@ -162,6 +183,10 @@ describe("verify", () => {
       bindings,
       targetRoot,
     );
+    if (prepared.status !== "prepared") {
+      throw new Error(`fixture preparation failed: ${prepared.detail}`);
+    }
+    const outcome = await executeVerification(prepared);
 
     expect(outcome).toMatchObject({ status: "injection-failed" });
   });
@@ -183,7 +208,26 @@ describe("verify", () => {
       .mockResolvedValueOnce(negative);
 
     await expect(
-      verify(pattern, instantiated, bindings, targetRoot),
+      executeVerification(prepare()),
+    ).resolves.toMatchObject({ status });
+  });
+
+  it.each([
+    [
+      "infrastructure error",
+      { kind: "error", detail: "reporter parse failed", logPath: "/logs/error.log" },
+      "gate-error",
+    ],
+    [
+      "timeout",
+      { kind: "error", detail: "timeout after 30000ms", logPath: "/logs/error.log" },
+      "timeout",
+    ],
+  ] as const)("maps a positive %s to its infrastructure status", async (_name, positive, status) => {
+    mockedRunGate.mockResolvedValueOnce(positive);
+
+    await expect(
+      executeVerification(prepare()),
     ).resolves.toMatchObject({ status });
   });
 
@@ -193,7 +237,7 @@ describe("verify", () => {
       .mockResolvedValueOnce(ran("passed", "/logs/negative.log"));
 
     await expect(
-      verify(pattern, instantiated, bindings, targetRoot),
+      executeVerification(prepare()),
     ).resolves.toMatchObject({ status: "negative-not-caught" });
   });
 
@@ -205,9 +249,26 @@ describe("verify", () => {
     });
 
     await expect(
-      verify(pattern, instantiated, bindings, targetRoot),
+      executeVerification(prepare()),
     ).resolves.toMatchObject({ status: "positive-failed" });
     expect(mockedRunGate).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects execution when generated output changes the displayed argv", async () => {
+    const prepared = prepare();
+    const gate = prepared.generated.files.find(
+      ({ role }) => role === "spec-check",
+    );
+    if (gate === undefined) {
+      throw new Error("fixture gate file is missing");
+    }
+    gate.path = "uptake-gate/changed-spec-gate.test.ts";
+
+    await expect(executeVerification(prepared)).resolves.toMatchObject({
+      status: "positive-failed",
+      detail: "prepared argv no longer matches generated output and bindings",
+    });
+    expect(mockedRunGate).not.toHaveBeenCalled();
   });
 });
 
