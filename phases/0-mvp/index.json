@@ -29,7 +29,9 @@
     {
       "step": 3,
       "name": "seed-catalog",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-24T14:27:38+0900",
+      "summary": "catalog/spec-change-declaration-gate.json — corroborated/generative 패턴 1개(backend.ai@ec253a6 + pytest@a53a4d9). roles: spec-artifact/spec-check/blocking-gate. oracle marker='/* @uptake:marker... */', gateTestId='declared-change-present'. step2 로더로 로드 통과"
     },
     {
       "step": 4,

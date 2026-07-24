@@ -219,7 +219,7 @@ function parsePattern(value: unknown, filename: string): ValidationResult {
       injection.operation !== "replace" ||
       !isId(injection.targetRole) ||
       !isNonEmptyString(injection.marker) ||
-      !isNonEmptyString(injection.replacement) ||
+      typeof injection.replacement !== "string" ||
       !roles.some((role) => role.id === injection.targetRole))
   ) {
     return { ok: false, reason: "schema-invalid" };

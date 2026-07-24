@@ -113,7 +113,7 @@ function makeFixture(): Fixture {
           operation: "replace",
           targetRole: "spec",
           marker: "UPTAKE_MARKER",
-          replacement: "violation",
+          replacement: "",
         },
         expect: "red",
       },
