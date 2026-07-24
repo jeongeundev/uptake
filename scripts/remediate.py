@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+"""Deterministic bookkeeping CLI for the review-remediation loop."""
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import shutil
+import sys
+import tempfile
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parent.parent
+TZ = timezone(timedelta(hours=9))
+SEVERITIES = {"blocker", "major", "minor", "nit"}
+REVIEW_KINDS = {"full", "closure"}
+CONFIDENCES = {"high", "med", "low"}
+CATEGORIES = {
+    "implementation_bug",
+    "contract_violation",
+    "test_gap",
+    "missing_feature",
+    "design_issue",
+}
+ACTIVE_STATES = {"unresolved", "accepted", "requires-human"}
+
+
+def stamp() -> str:
+    return datetime.now(TZ).strftime("%Y-%m-%dT%H:%M:%S%z")
+
+
+def fingerprint(evidence_files: list[str], spec: list[str], title: str) -> str:
+    path = evidence_files[0].strip() if evidence_files else ""
+    path = re.sub(r":\d+(?::\d+)?$", "", path)
+    if path.startswith("./"):
+        path = path[2:]
+
+    title_slug = re.sub(r"[^0-9a-z가-힣]+", "-", title.lower())
+    title_slug = re.sub(r"-+", "-", title_slug).strip("-")
+    value = f"{path}|{','.join(sorted(spec))}|{title_slug}"
+    return hashlib.sha1(value.encode("utf-8")).hexdigest()[:12]
+
+
+def load_manifest(root: Path | str, loop_id: str) -> dict | None:
+    path = Path(root) / "remediation" / loop_id / "manifest.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_manifest(root: Path | str, loop_id: str, manifest: dict) -> None:
+    directory = Path(root) / "remediation" / loop_id
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "manifest.json"
+    encoded = json.dumps(manifest, indent=2, ensure_ascii=False)
+
+    fd, temporary_name = tempfile.mkstemp(dir=directory, prefix=".manifest-", text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as temporary:
+            temporary.write(encoded)
+        os.replace(temporary_name, path)
+    except BaseException:
+        Path(temporary_name).unlink(missing_ok=True)
+        raise
+
+
+def _require(mapping: dict, key: str, context: str):
+    if key not in mapping:
+        raise ValueError(f"{context}: missing required field '{key}'")
+    return mapping[key]
+
+
+def _require_string(mapping: dict, key: str, context: str) -> str:
+    value = _require(mapping, key, context)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{context}.{key}: expected non-empty string")
+    return value
+
+
+def _validate_review(review: object) -> dict:
+    if not isinstance(review, dict):
+        raise ValueError("review: expected object")
+
+    review_id = _require_string(review, "reviewId", "review")
+    if Path(review_id).name != review_id:
+        raise ValueError("review.reviewId: expected file-safe identifier")
+
+    round_number = _require(review, "round", "review")
+    if not isinstance(round_number, int) or isinstance(round_number, bool) or round_number < 1:
+        raise ValueError("review.round: expected integer >= 1")
+
+    kind = _require(review, "kind", "review")
+    if kind not in REVIEW_KINDS:
+        raise ValueError(f"review.kind: expected one of {sorted(REVIEW_KINDS)}")
+
+    target = _require(review, "target", "review")
+    if not isinstance(target, dict):
+        raise ValueError("review.target: expected object")
+    for field in ("phase", "branch", "baseCommit"):
+        _require_string(target, field, "review.target")
+
+    _require_string(review, "reviewer", "review")
+    _require_string(review, "createdAt", "review")
+    findings = _require(review, "findings", "review")
+    if not isinstance(findings, list):
+        raise ValueError("review.findings: expected array")
+
+    for index, finding in enumerate(findings):
+        context = f"review.findings[{index}]"
+        if not isinstance(finding, dict):
+            raise ValueError(f"{context}: expected object")
+        finding_id = _require(finding, "id", context)
+        if finding_id is not None and not re.fullmatch(r"F-\d{3}", str(finding_id)):
+            raise ValueError(f"{context}.id: expected null or F-NNN")
+        severity = _require(finding, "severity", context)
+        if severity not in SEVERITIES:
+            raise ValueError(f"{context}.severity: expected one of {sorted(SEVERITIES)}")
+        _require_string(finding, "title", context)
+        _require_string(finding, "detail", context)
+
+        evidence = _require(finding, "evidence", context)
+        if not isinstance(evidence, dict):
+            raise ValueError(f"{context}.evidence: expected object")
+        for field in ("files", "spec"):
+            values = _require(evidence, field, f"{context}.evidence")
+            if not isinstance(values, list) or not all(
+                isinstance(value, str) for value in values
+            ):
+                raise ValueError(f"{context}.evidence.{field}: expected string array")
+
+        suggested_category = finding.get("suggestedCategory")
+        if suggested_category is not None and suggested_category not in CATEGORIES:
+            raise ValueError(f"{context}.suggestedCategory: invalid value")
+        confidence = _require(finding, "reviewerConfidence", context)
+        if confidence not in CONFIDENCES:
+            raise ValueError(
+                f"{context}.reviewerConfidence: expected one of {sorted(CONFIDENCES)}"
+            )
+        closure_verdict = _require(finding, "closureVerdict", context)
+        if kind == "full" and closure_verdict is not None:
+            raise ValueError(f"{context}.closureVerdict: full review requires null")
+        if kind == "closure" and closure_verdict not in {"resolved", "still-open"}:
+            raise ValueError(
+                f"{context}.closureVerdict: closure review requires a verdict"
+            )
+
+    return review
+
+
+def _next_finding_id(findings: list[dict]) -> str:
+    numbers = [
+        int(match.group(1))
+        for finding in findings
+        if (match := re.fullmatch(r"F-(\d{3})", finding.get("id", "")))
+    ]
+    return f"F-{max(numbers, default=0) + 1:03d}"
+
+
+def _transition_to_requires_human(
+    finding: dict, cycle: int, evidence: str
+) -> None:
+    previous = finding["state"]
+    finding["state"] = "requires-human"
+    finding["history"].append(
+        {
+            "cycle": cycle,
+            "from": previous,
+            "to": "requires-human",
+            "by": "ingest",
+            "evidence": evidence,
+            "at": stamp(),
+        }
+    )
+
+
+def cmd_ingest(root: Path | str, loop_id: str, review_path: Path | str) -> int:
+    root = Path(root)
+    review_path = Path(review_path)
+    review = _validate_review(json.loads(review_path.read_text(encoding="utf-8")))
+    manifest = load_manifest(root, loop_id)
+
+    if manifest is None:
+        manifest = {
+            "loopId": loop_id,
+            "target": review["target"],
+            "createdAt": stamp(),
+            "state": "triaging",
+            "currentCycle": 1,
+            "maxCycles": 2,
+            "findings": [],
+            "cycles": [],
+        }
+    elif manifest["target"] != review["target"]:
+        raise ValueError("review.target does not match existing manifest target")
+
+    existing_by_fingerprint = {
+        finding["fingerprint"]: finding for finding in manifest["findings"]
+    }
+    used_ids = {finding["id"] for finding in manifest["findings"]}
+
+    for reviewed_finding in review["findings"]:
+        evidence = reviewed_finding["evidence"]
+        finding_fingerprint = fingerprint(
+            evidence["files"], evidence["spec"], reviewed_finding["title"]
+        )
+        existing = existing_by_fingerprint.get(finding_fingerprint)
+        if existing is not None:
+            existing["detail"] = reviewed_finding["detail"]
+            if existing["state"] in ACTIVE_STATES:
+                continue
+            if existing["state"] == "resolved":
+                _transition_to_requires_human(
+                    existing, manifest["currentCycle"], "재발: 동일 fingerprint 재검출"
+                )
+            elif existing["state"] == "rejected":
+                _transition_to_requires_human(
+                    existing,
+                    manifest["currentCycle"],
+                    "리뷰어 불일치: rejected finding 재검출",
+                )
+            continue
+
+        requested_id = reviewed_finding["id"]
+        finding_id = requested_id or _next_finding_id(manifest["findings"])
+        if finding_id in used_ids:
+            raise ValueError(f"finding id already exists: {finding_id}")
+
+        finding = {
+            "id": finding_id,
+            "fingerprint": finding_fingerprint,
+            "severity": reviewed_finding["severity"],
+            "category": None,
+            "title": reviewed_finding["title"],
+            "detail": reviewed_finding["detail"],
+            "state": "unresolved",
+            "raisedInReview": review["reviewId"],
+            "firstSeenCycle": manifest["currentCycle"],
+            "specRefs": evidence["spec"],
+            "evidenceFiles": evidence["files"],
+            "suggestedCategory": reviewed_finding.get("suggestedCategory"),
+            "canonicalId": None,
+            "routedTo": None,
+            "remediationStep": None,
+            "history": [],
+        }
+        manifest["findings"].append(finding)
+        existing_by_fingerprint[finding_fingerprint] = finding
+        used_ids.add(finding_id)
+
+    reviews_directory = root / "remediation" / loop_id / "reviews"
+    reviews_directory.mkdir(parents=True, exist_ok=True)
+    preserved_review = reviews_directory / f"{review['reviewId']}.json"
+    if review_path.resolve() != preserved_review.resolve():
+        shutil.copyfile(review_path, preserved_review)
+    save_manifest(root, loop_id, manifest)
+    return 0
+
+
+def cmd_status(root: Path | str, loop_id: str) -> int:
+    manifest = load_manifest(root, loop_id)
+    if manifest is None:
+        raise ValueError(f"manifest not found for loop '{loop_id}'")
+
+    print(
+        f"loop {manifest['loopId']} — {manifest['state']} "
+        f"(cycle {manifest['currentCycle']}/{manifest['maxCycles']})"
+    )
+    for finding in manifest["findings"]:
+        category = finding["category"] if finding["category"] is not None else "-"
+        print(
+            f"{finding['id']}  {finding['severity']}  {category}  {finding['state']}"
+        )
+    print(f"cycles: {len(manifest['cycles'])}")
+    for cycle in manifest["cycles"]:
+        print(
+            f"cycle {cycle['cycle']}: review={cycle.get('review', '-')} "
+            f"verdict={cycle.get('verdict', '-')}"
+        )
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    ingest = subparsers.add_parser("ingest")
+    ingest.add_argument("loop_id")
+    ingest.add_argument("review_path", type=Path)
+    ingest.add_argument("--root", type=Path, default=ROOT)
+
+    status = subparsers.add_parser("status")
+    status.add_argument("loop_id")
+    status.add_argument("--root", type=Path, default=ROOT)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        if args.command == "ingest":
+            return cmd_ingest(args.root, args.loop_id, args.review_path)
+        return cmd_status(args.root, args.loop_id)
+    except (OSError, ValueError, json.JSONDecodeError, KeyError) as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
