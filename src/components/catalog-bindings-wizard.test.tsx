@@ -3,9 +3,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import {
+  ApplyResultView,
   BindingsView,
   CatalogView,
+  PreparedView,
+  VerifyResultView,
+  approveAndApply,
   bindingsComplete,
+  postWorkflowAction,
   type CatalogResponse,
 } from "@/components/catalog-bindings-wizard";
 
@@ -151,5 +156,140 @@ describe("catalog and bindings UI", () => {
     expect(bindingsComplete(bindings, { "spec-format": "markdown" })).toBe(
       true,
     );
+  });
+});
+
+describe("verify and apply UI", () => {
+  const prepared = {
+    status: "prepared" as const,
+    frozenArgv: ["node", "vitest.mjs", "run", "generated/spec-gate.test.ts"],
+    cwd: "temporary workspace outside the target repository" as const,
+    timeoutMs: 30_000,
+    files: [
+      {
+        operation: "add" as const,
+        path: "generated/spec-gate.test.ts",
+        role: "spec-check",
+        content: "VERIFIED FILE CONTENT",
+      },
+    ],
+  };
+
+  it("shows frozen argv, cwd, and timeout before the execute control (AC-12)", () => {
+    const markup = renderToStaticMarkup(
+      <PreparedView prepared={prepared} executing={false} onExecute={() => undefined} />,
+    );
+
+    for (const argument of prepared.frozenArgv) {
+      expect(markup).toContain(argument);
+    }
+    expect(markup).toContain(prepared.cwd);
+    expect(markup).toContain("30000 ms");
+    expect(markup.indexOf("30000 ms")).toBeLessThan(
+      markup.indexOf("이식 실행"),
+    );
+    expect(markup).not.toContain(prepared.files[0].content);
+    expect(markup).not.toContain("승인 및 적용");
+  });
+
+  it("posts no client argv, files, or approval boolean", async () => {
+    const calls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
+    const request = async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push([input, init]);
+      const status = String(input).endsWith("/approve")
+        ? "approved"
+        : "awaiting-approval";
+      return new Response(JSON.stringify({ status }));
+    };
+
+    await postWorkflowAction("workflow-1", "prepare", request);
+    await postWorkflowAction("workflow-1", "execute", request);
+    await approveAndApply("workflow-1", request);
+
+    expect(calls.map(([url]) => String(url))).toEqual([
+      "/api/workflows/workflow-1/prepare",
+      "/api/workflows/workflow-1/execute",
+      "/api/workflows/workflow-1/approve",
+      "/api/workflows/workflow-1/apply",
+    ]);
+    expect(calls.every(([, init]) => init?.method === "POST")).toBe(true);
+    expect(calls.every(([, init]) => init?.body === undefined)).toBe(true);
+  });
+
+  it("does not request apply when server approval is absent (AC-10)", async () => {
+    const urls: string[] = [];
+    const request = async (input: RequestInfo | URL) => {
+      urls.push(String(input));
+      return new Response(
+        JSON.stringify({ status: "not-verified", detail: "verification required" }),
+      );
+    };
+
+    expect(await approveAndApply("workflow-1", request)).toEqual({
+      status: "not-verified",
+      detail: "verification required",
+    });
+    expect(urls).toEqual(["/api/workflows/workflow-1/approve"]);
+  });
+
+  it.each([
+    ["positive-failed", "준수 상태의 게이트가 통과하지 못했습니다."],
+    ["injection-failed", "판별 위반을 생성물에 심지 못했습니다."],
+    ["gate-error", "게이트가 판정 가능한 결과를 만들지 못했습니다."],
+    ["negative-not-caught", "게이트가 심은 위반을 잡지 못했습니다."],
+    ["timeout", "게이트 실행이 제한 시간을 초과했습니다."],
+  ] as const)("renders %s as a blocking result with its detail", (status, copy) => {
+    const markup = renderToStaticMarkup(
+      <VerifyResultView
+        files={prepared.files}
+        applying={false}
+        onApproveAndApply={() => undefined}
+        result={{ status, detail: `${status} detail` }}
+      />,
+    );
+
+    expect(markup).toContain("text-red-400");
+    expect(markup).toContain(copy);
+    expect(markup).toContain(`${status} detail`);
+    expect(markup).not.toContain("승인 및 적용");
+    expect(markup).not.toContain(prepared.files[0].content);
+  });
+
+  it("shows only the verified add-only diff and approval control on success (AC-9/10)", () => {
+    const markup = renderToStaticMarkup(
+      <VerifyResultView
+        files={prepared.files}
+        applying={false}
+        onApproveAndApply={() => undefined}
+        result={{
+          status: "awaiting-approval",
+          contentHash: "verified-hash",
+          frozenArgv: prepared.frozenArgv,
+          positiveLog: "/tmp/positive.json",
+          negativeLog: "/tmp/negative.json",
+        }}
+      />,
+    );
+
+    expect(markup).toContain("text-green-400");
+    expect(markup).toContain("양성 green과 음성 red가 확인되었습니다.");
+    expect(markup).toContain("add");
+    expect(markup).toContain(prepared.files[0].path);
+    expect(markup).toContain(prepared.files[0].role);
+    expect(markup).toContain(prepared.files[0].content);
+    expect(markup).toContain("승인 및 적용");
+  });
+
+  it("shows completed files and exact apply rejection details", () => {
+    const completed = renderToStaticMarkup(
+      <ApplyResultView result={{ status: "completed", written: ["generated/spec-gate.test.ts"] }} />,
+    );
+    const rejected = renderToStaticMarkup(
+      <ApplyResultView result={{ status: "diff-mismatch", detail: "verified content changed" }} />,
+    );
+
+    expect(completed).toContain("generated/spec-gate.test.ts");
+    expect(rejected).toContain("diff-mismatch");
+    expect(rejected).toContain("verified content changed");
   });
 });

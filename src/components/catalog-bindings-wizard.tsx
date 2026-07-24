@@ -17,6 +17,86 @@ type Binding = {
 type WorkflowResponse =
   | { status: "bindings-ready"; workflowId: string; bindings: Binding[] }
   | { status: string; detail: string };
+type PreparedResponse = {
+  status: "prepared";
+  frozenArgv: string[];
+  cwd: "temporary workspace outside the target repository";
+  timeoutMs: number;
+  files: GeneratedFile[];
+};
+type GeneratedFile = {
+  operation: "add";
+  path: string;
+  role: string;
+  content: string;
+};
+type VerifyResult =
+  | {
+      status: "awaiting-approval";
+      contentHash: string;
+      frozenArgv: string[];
+      positiveLog: string;
+      negativeLog: string;
+    }
+  | {
+      status:
+        | "positive-failed"
+        | "injection-failed"
+        | "gate-error"
+        | "negative-not-caught"
+        | "timeout";
+      detail: string;
+    };
+type ApplyResult =
+  | { status: "completed"; written: string[] }
+  | {
+      status:
+        | "diff-mismatch"
+        | "apply-failed"
+        | "base-changed"
+        | "not-approved"
+        | "unknown-approval"
+        | "not-verified"
+        | "workflow-not-found";
+      detail: string;
+    };
+type Requester = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response>;
+
+export async function postWorkflowAction(
+  workflowId: string,
+  action: "prepare" | "execute" | "approve" | "apply",
+  request: Requester = fetch,
+): Promise<unknown> {
+  const response = await request(`/api/workflows/${workflowId}/${action}`, {
+    method: "POST",
+  });
+  return response.json();
+}
+
+export async function approveAndApply(
+  workflowId: string,
+  request: Requester = fetch,
+): Promise<ApplyResult> {
+  const approved = (await postWorkflowAction(
+    workflowId,
+    "approve",
+    request,
+  )) as { status: string; detail?: string };
+  if (approved.status !== "approved") {
+    return {
+      status: approved.status as Exclude<ApplyResult["status"], "completed">,
+      detail: approved.detail ?? "Approval was rejected.",
+    };
+  }
+  return (await postWorkflowAction(
+    workflowId,
+    "apply",
+    request,
+  )) as ApplyResult;
+}
 
 export function bindingsComplete(
   bindings: Binding[],
@@ -167,6 +247,127 @@ export function BindingsView({
   );
 }
 
+export function PreparedView({
+  prepared,
+  executing,
+  onExecute,
+}: {
+  prepared: PreparedResponse;
+  executing: boolean;
+  onExecute: () => void;
+}) {
+  return (
+    <section aria-labelledby="execute-heading" className="space-y-4">
+      <div>
+        <p className="text-xs text-neutral-500">Step 3 · Execute</p>
+        <h2 id="execute-heading" className="text-lg font-semibold">Execution contract</h2>
+      </div>
+      <div className="border border-neutral-800 bg-[#141414] p-4">
+        <p className="text-xs font-medium text-neutral-500">argv</p>
+        <ol className="mt-2 space-y-1 font-mono text-xs text-neutral-300">
+          {prepared.frozenArgv.map((argument, index) => (
+            <li key={`${index}:${argument}`}>[{index}] {argument}</li>
+          ))}
+        </ol>
+        <p className="mt-4 text-xs font-medium text-neutral-500">cwd</p>
+        <p className="mt-1 font-mono text-xs text-neutral-300">{prepared.cwd}</p>
+        <p className="mt-4 text-xs font-medium text-neutral-500">timeout</p>
+        <p className="mt-1 font-mono text-xs text-neutral-300">{prepared.timeoutMs} ms</p>
+      </div>
+      <button
+        className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black disabled:bg-neutral-800 disabled:text-neutral-500"
+        disabled={executing}
+        onClick={onExecute}
+        type="button"
+      >
+        {executing ? "실행 중…" : "이식 실행"}
+      </button>
+    </section>
+  );
+}
+
+const verifyCopy: Record<Exclude<VerifyResult["status"], "awaiting-approval">, string> = {
+  "positive-failed": "준수 상태의 게이트가 통과하지 못했습니다.",
+  "injection-failed": "판별 위반을 생성물에 심지 못했습니다.",
+  "gate-error": "게이트가 판정 가능한 결과를 만들지 못했습니다.",
+  "negative-not-caught": "게이트가 심은 위반을 잡지 못했습니다.",
+  timeout: "게이트 실행이 제한 시간을 초과했습니다.",
+};
+
+export function VerifyResultView({
+  result,
+  files,
+  applying,
+  onApproveAndApply,
+}: {
+  result: VerifyResult;
+  files: GeneratedFile[];
+  applying: boolean;
+  onApproveAndApply: () => void;
+}) {
+  if (result.status !== "awaiting-approval") {
+    return (
+      <section className="border-l-2 border-red-500 bg-[#141414] p-4">
+        <h2 className="text-sm font-medium text-red-400">{result.status}</h2>
+        <p className="mt-2 text-sm text-red-400">{verifyCopy[result.status]}</p>
+        <p className="mt-2 font-mono text-xs text-neutral-300">{result.detail}</p>
+      </section>
+    );
+  }
+
+  return (
+    <section aria-labelledby="diff-heading" className="space-y-4">
+      <div className="border-l-2 border-green-500 bg-[#141414] p-4">
+        <h2 className="text-sm font-medium text-green-400">awaiting-approval</h2>
+        <p className="mt-2 text-sm text-green-400">
+          양성 green과 음성 red가 확인되었습니다. 승인 대기 중입니다.
+        </p>
+      </div>
+      <div>
+        <p className="text-xs text-neutral-500">Step 4 · Review</p>
+        <h2 id="diff-heading" className="text-lg font-semibold">Verified diff</h2>
+      </div>
+      {files.map((file) => (
+        <article className="border border-neutral-800 bg-[#141414] p-4" key={file.path}>
+          <p className="font-mono text-xs text-neutral-400">
+            {file.operation} · {file.path} · {file.role}
+          </p>
+          <pre className="mt-3 overflow-x-auto whitespace-pre-wrap font-mono text-xs text-neutral-300">
+            {file.content}
+          </pre>
+        </article>
+      ))}
+      <button
+        className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black disabled:bg-neutral-800 disabled:text-neutral-500"
+        disabled={applying}
+        onClick={onApproveAndApply}
+        type="button"
+      >
+        {applying ? "적용 중…" : "승인 및 적용"}
+      </button>
+    </section>
+  );
+}
+
+export function ApplyResultView({ result }: { result: ApplyResult }) {
+  if (result.status === "completed") {
+    return (
+      <section className="border-l-2 border-green-500 bg-[#141414] p-4">
+        <h2 className="text-sm font-medium text-green-400">completed</h2>
+        <ul className="mt-2 space-y-1 font-mono text-xs text-neutral-300">
+          {result.written.map((path) => <li key={path}>{path}</li>)}
+        </ul>
+      </section>
+    );
+  }
+  return (
+    <section className="border-l-2 border-red-500 bg-[#141414] p-4">
+      <h2 className="text-sm font-medium text-red-400">{result.status}</h2>
+      <p className="mt-2 font-mono text-xs text-neutral-300">{result.detail}</p>
+    </section>
+  );
+}
+
 export default function CatalogBindingsWizard() {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
@@ -177,6 +378,11 @@ export default function CatalogBindingsWizard() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [bindingsSaved, setBindingsSaved] = useState(false);
+  const [prepared, setPrepared] = useState<PreparedResponse | null>(null);
+  const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
+  const [applyResult, setApplyResult] = useState<ApplyResult | null>(null);
+  const [executing, setExecuting] = useState(false);
+  const [applying, setApplying] = useState(false);
 
   useEffect(() => {
     fetch("/api/catalog")
@@ -219,6 +425,58 @@ export default function CatalogBindingsWizard() {
     }
     setBindings(result.bindings);
     setBindingsSaved(true);
+    const preparation = (await postWorkflowAction(
+      workflowId,
+      "prepare",
+    )) as PreparedResponse | { status: string; detail: string };
+    if (!("frozenArgv" in preparation)) {
+      return setError(
+        preparation.detail,
+      );
+    }
+    setPrepared(preparation);
+  }
+
+  function discardAfterBindings() {
+    setBindingsSaved(false);
+    setPrepared(null);
+    setVerifyResult(null);
+    setApplyResult(null);
+  }
+
+  async function executePrepared() {
+    if (!workflowId || !prepared || executing) return;
+    setExecuting(true);
+    setError(null);
+    const result = (await postWorkflowAction(
+      workflowId,
+      "execute",
+    )) as VerifyResult | { status: string; detail: string };
+    setExecuting(false);
+    if (
+      ![
+        "awaiting-approval",
+        "positive-failed",
+        "injection-failed",
+        "gate-error",
+        "negative-not-caught",
+        "timeout",
+      ].includes(result.status)
+    ) {
+      return setError(
+        "detail" in result ? result.detail : "Verification failed.",
+      );
+    }
+    setVerifyResult(result as VerifyResult);
+  }
+
+  async function applyVerified() {
+    if (!workflowId || applying) return;
+    setApplying(true);
+    setError(null);
+    const result = await approveAndApply(workflowId);
+    setApplying(false);
+    setApplyResult(result);
   }
 
   return (
@@ -231,7 +489,11 @@ export default function CatalogBindingsWizard() {
       {catalog ? (
         <CatalogView
           catalog={catalog}
-          onSelect={(id) => { setSelectedPatternId(id); setWorkflowId(null); setBindingsSaved(false); }}
+          onSelect={(id) => {
+            setSelectedPatternId(id);
+            setWorkflowId(null);
+            discardAfterBindings();
+          }}
           selectedPatternId={selectedPatternId}
         />
       ) : <p className="text-sm text-neutral-400">Loading catalog…</p>}
@@ -239,20 +501,38 @@ export default function CatalogBindingsWizard() {
         <form className="space-y-3" onSubmit={startWorkflow}>
           <p className="text-xs text-neutral-500">Step 2 · Next</p>
           <label className="block text-sm font-medium" htmlFor="targetRepoRoot">Absolute target repository path</label>
-          <input className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 font-mono text-sm" id="targetRepoRoot" onChange={(event) => setTargetRepoRoot(event.currentTarget.value)} required value={targetRepoRoot} />
+          <input className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 font-mono text-sm" id="targetRepoRoot" onChange={(event) => { setTargetRepoRoot(event.currentTarget.value); discardAfterBindings(); }} required value={targetRepoRoot} />
           <button className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black" type="submit">Start workflow</button>
         </form>
       )}
       {workflowId && (
         <BindingsView
           bindings={bindings}
-          onChange={(id, value) => setValues((current) => ({ ...current, [id]: value }))}
+          onChange={(id, value) => {
+            setValues((current) => ({ ...current, [id]: value }));
+            discardAfterBindings();
+          }}
           onContinue={saveBindings}
           saving={saving}
           values={values}
         />
       )}
-      {bindingsSaved && <p className="border-l-2 border-neutral-600 pl-4 text-sm text-neutral-400">Bindings complete. Verification is implemented in the next step.</p>}
+      {bindingsSaved && prepared && !verifyResult && (
+        <PreparedView
+          executing={executing}
+          onExecute={executePrepared}
+          prepared={prepared}
+        />
+      )}
+      {verifyResult && prepared && !applyResult && (
+        <VerifyResultView
+          applying={applying}
+          files={prepared.files}
+          onApproveAndApply={applyVerified}
+          result={verifyResult}
+        />
+      )}
+      {applyResult && <ApplyResultView result={applyResult} />}
     </main>
   );
 }
