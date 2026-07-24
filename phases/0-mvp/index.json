@@ -63,7 +63,8 @@
       "name": "verify-orchestrator",
       "status": "completed",
       "started_at": "2026-07-24T14:41:19+0900",
-      "summary": "src/lib/engine/verify.ts — verify(pattern, generated, bindings, targetRoot): W_pos/W_neg 라이프사이클, runGate 2회 호출, gateTestId 해석(양성 passed·음성 failed 대조), error→gate-error/timeout(AC-7b), 음성 green→negative-not-caught(AC-8), injection 순수치환·marker 1회, argv 동결(AC-12), 타깃 불변(AC-5). hashGenerated 유틸(step8 재사용). 워크스페이스=tracked만·install 없음"
+      "summary": "src/lib/engine/verify.ts — verify(pattern, generated, bindings, targetRoot): W_pos/W_neg 라이프사이클, runGate 2회 호출, gateTestId 해석(양성 passed·음성 failed 대조), error→gate-error/timeout(AC-7b), 음성 green→negative-not-caught(AC-8), injection 순수치환·marker 1회, argv 동결(AC-12), 타깃 불변(AC-5). hashGenerated 유틸(step8 재사용). 워크스페이스=tracked만·install 없음",
+      "completed_at": "2026-07-24T14:46:15+0900"
     },
     {
       "step": 8,
