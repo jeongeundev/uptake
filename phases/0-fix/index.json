@@ -1,0 +1,8 @@
+{
+  "project": "uptake",
+  "phase": "0-fix",
+  "steps": [
+    { "step": 0, "name": "verify-contract", "status": "pending" },
+    { "step": 1, "name": "verify-integration", "status": "pending" }
+  ]
+}
