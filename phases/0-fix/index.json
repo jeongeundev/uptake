@@ -13,7 +13,9 @@
     {
       "step": 1,
       "name": "verify-integration",
-      "status": "pending"
+      "status": "completed",
+      "summary": "src/__tests__/pipeline.integration.test.ts — mock 없는 실제 파이프라인(loadCatalog→detectBindings→instantiate→prepare/executeVerification 실제 vitest→applyGenerated). AC-5/6/7/9/10을 실제 subprocess로 실증(AC-11 엔진 부분). 씨앗 부재 시 사유 로그 후 skip",
+      "started_at": "2026-07-24T15:44:01+0900"
     }
   ],
   "created_at": "2026-07-24T15:41:18+0900"
