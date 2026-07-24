@@ -21,7 +21,9 @@
     {
       "step": 2,
       "name": "catalog-loader",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-24T14:21:23+0900",
+      "summary": "src/lib/catalog/load.ts + src/lib/provenance/resolve.ts — 층1 하드게이트(AC-1/2/2b) 로드 거부, git show 기반 provenance resolve, generationEnabled 계산. 스키마 세부 규칙: 소문자 kebab-case ID·배열 ID 중복 금지, unknown field 거부, POSIX 상대 정규 경로·40자리 commit SHA 강제, schemaVersion 1·patternId/파일명 일치, 오류 파일만 rejected 격리. loadCatalog(dir, sourceRoot)/resolveProvenance(source, prov, root) 시그니처"
     },
     {
       "step": 3,
