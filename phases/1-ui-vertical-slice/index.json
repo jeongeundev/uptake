@@ -23,7 +23,8 @@
       "name": "catalog-bindings-ui",
       "status": "completed",
       "started_at": "2026-07-24T17:56:50+0900",
-      "summary": "catalog-bindings-wizard 컴포넌트와 page 연결을 구현하고 AC-3 생성 차단·provenance/rejection 표시 및 AC-4 binding 근거·미해결 입력 차단 테스트를 추가했다."
+      "summary": "catalog-bindings-wizard 컴포넌트와 page 연결을 구현하고 AC-3 생성 차단·provenance/rejection 표시 및 AC-4 binding 근거·미해결 입력 차단 테스트를 추가했다.",
+      "completed_at": "2026-07-24T18:03:50+0900"
     },
     {
       "step": 3,
