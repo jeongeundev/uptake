@@ -15,7 +15,8 @@
       "name": "workflow-api",
       "status": "completed",
       "started_at": "2026-07-24T17:46:28+0900",
-      "summary": "GET /api/catalog과 workflow 생성·bindings·prepare·execute·approve·apply Route Handler, 서버측 상태 전이·HttpOnly 세션 결속, workflow-store/route 테스트를 구현했다."
+      "summary": "GET /api/catalog과 workflow 생성·bindings·prepare·execute·approve·apply Route Handler, 서버측 상태 전이·HttpOnly 세션 결속, workflow-store/route 테스트를 구현했다.",
+      "completed_at": "2026-07-24T17:56:50+0900"
     },
     {
       "step": 2,
