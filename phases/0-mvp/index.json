@@ -7,7 +7,8 @@
       "name": "project-setup",
       "status": "completed",
       "started_at": "2026-07-24T14:18:02+0900",
-      "summary": "스캐폴딩 완료 — Next.js 15/TS strict/Tailwind/vitest, 디렉토리 구조, npm scripts(dev/build/lint/test), 스모크 테스트"
+      "summary": "스캐폴딩 완료 — Next.js 15/TS strict/Tailwind/vitest, 디렉토리 구조, npm scripts(dev/build/lint/test), 스모크 테스트",
+      "completed_at": "2026-07-24T14:20:35+0900"
     },
     {
       "step": 1,
