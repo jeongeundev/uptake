@@ -7,7 +7,8 @@
       "name": "approval-store",
       "status": "completed",
       "started_at": "2026-07-24T16:09:26+0900",
-      "summary": "src/services/approval-store.ts(in-memory Map, createApproval/approveVerification/consumeApproved, verificationId=randomUUID, 1회용) + apply.ts를 verificationId 기반으로 변경. approve 없는 apply→not-approved 쓰기없음(AC-10), diff-mismatch/base-changed 유지(AC-9). ApprovalRecord 공개 export 제거. 승인 저장=in-memory·프로세스 수명 확정"
+      "summary": "src/services/approval-store.ts(in-memory Map, createApproval/approveVerification/consumeApproved, verificationId=randomUUID, 1회용) + apply.ts를 verificationId 기반으로 변경. approve 없는 apply→not-approved 쓰기없음(AC-10), diff-mismatch/base-changed 유지(AC-9). ApprovalRecord 공개 export 제거. 승인 저장=in-memory·프로세스 수명 확정",
+      "completed_at": "2026-07-24T16:13:50+0900"
     },
     {
       "step": 1,
