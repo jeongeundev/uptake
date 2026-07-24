@@ -51,8 +51,16 @@ def triage_fixture(tmp_path: Path) -> dict:
             "F-001": {"category": "contract_violation", "evidence": "AC-7b 위반"},
             "F-002": {"category": "implementation_bug", "evidence": "실행 순서 위반"},
             "F-003": {"category": "test_gap", "evidence": "통합 검증 부재"},
-            "F-004": {"category": "missing_feature", "evidence": "UI 미구현"},
-            "F-005": {"category": "missing_feature", "evidence": "preview 미구현"},
+            "F-004": {
+                "category": "missing_feature",
+                "evidence": "UI 미구현",
+                "routedTo": "1-user-ui-slice",
+            },
+            "F-005": {
+                "category": "missing_feature",
+                "evidence": "preview 미구현",
+                "routedTo": "1-argv-preview",
+            },
         },
     )
     assert remediate.cmd_apply_triage(tmp_path, "0-mvp", 1) == 0
@@ -79,6 +87,45 @@ def write_closure_review(
     path = tmp_path / f"{review_id}.json"
     path.write_text(json.dumps(review, ensure_ascii=False), encoding="utf-8")
     return path
+
+
+def seed_fix_phase(
+    tmp_path: Path,
+    *,
+    cycle: int = 1,
+    steps: list[dict] | None = None,
+    completed_at: str | None = "2026-07-24T18:00:00+0900",
+) -> Path:
+    path = tmp_path / "phases" / f"0-mvp-fix-c{cycle}" / "index.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    index = {
+        "project": "uptake",
+        "phase": f"0-mvp-fix-c{cycle}",
+        "steps": steps or [{"step": 0, "name": "fix", "status": "completed"}],
+    }
+    if completed_at is not None:
+        index["completed_at"] = completed_at
+    path.write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def prepare_ready_cycle(tmp_path: Path) -> dict:
+    triage_fixture(tmp_path)
+    remediate.cmd_closure_packet(tmp_path, "0-mvp", 1)
+    remediate.cmd_ingest_closure(tmp_path, "0-mvp", CLOSURE_FIXTURE, 1)
+    seed_fix_phase(tmp_path)
+    return remediate.load_manifest(tmp_path, "0-mvp")
+
+
+def read_ruling(tmp_path: Path, cycle: int = 1) -> dict:
+    path = (
+        tmp_path
+        / "remediation"
+        / "0-mvp"
+        / f"cycle-{cycle}"
+        / "ruling.json"
+    )
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def test_ingest_creates_manifest_with_five_unresolved_findings(tmp_path):
@@ -426,3 +473,165 @@ def test_ingest_closure_cannot_resolve_nonaccepted_finding(tmp_path):
 
     with pytest.raises(ValueError, match="accepted"):
         remediate.cmd_ingest_closure(tmp_path, "0-mvp", review_path, 1)
+
+
+def test_rule_ready_with_resolved_major_and_deferred_findings(tmp_path, capsys):
+    prepare_ready_cycle(tmp_path)
+
+    assert remediate.cmd_rule(tmp_path, "0-mvp", 1) == 0
+
+    assert capsys.readouterr().out.strip() == "Ready"
+    ruling = read_ruling(tmp_path)
+    assert ruling["verdict"] == "Ready"
+    assert all(ruling["gates"].values())
+    assert ruling["failedGates"] == []
+    assert ruling["readyForHandoff"] is True
+    assert ruling["handoff"] is None
+    assert [
+        item["id"] for item in ruling["deferredToImplementation"]
+    ] == ["F-004", "F-005"]
+    assert [
+        item["routedTo"] for item in ruling["deferredToImplementation"]
+    ] == ["1-user-ui-slice", "1-argv-preview"]
+    manifest = remediate.load_manifest(tmp_path, "0-mvp")
+    assert manifest is not None
+    assert manifest["state"] == "ready"
+    assert manifest["cycles"][0]["verdict"] == "Ready"
+
+
+def test_rule_open_blocker_escalates_and_names_finding(tmp_path):
+    manifest = ingest_fixture(tmp_path)
+    finding_by_id(manifest, "F-001")["severity"] = "blocker"
+    save_path = tmp_path / "remediation" / "0-mvp" / "manifest.json"
+    save_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+    write_triage(
+        tmp_path,
+        {"F-001": {"category": "implementation_bug", "evidence": "열린 blocker"}},
+    )
+    remediate.cmd_apply_triage(tmp_path, "0-mvp", 1)
+    seed_fix_phase(tmp_path)
+
+    assert remediate.cmd_rule(tmp_path, "0-mvp", 1) == 0
+
+    ruling = read_ruling(tmp_path)
+    assert ruling["verdict"] == "Escalate"
+    assert ruling["gates"]["G1"] is False
+    assert "F-001" in " ".join(ruling["escalationReasons"])
+
+
+def test_rule_score_never_overrides_failed_or_passing_gates(tmp_path):
+    manifest = ingest_fixture(tmp_path)
+    for finding in manifest["findings"]:
+        finding["state"] = "rejected"
+    finding_by_id(manifest, "F-001")["state"] = "accepted"
+    finding_by_id(manifest, "F-001")["severity"] = "major"
+    remediate.save_manifest(tmp_path, "0-mvp", manifest)
+    seed_fix_phase(tmp_path)
+
+    remediate.cmd_rule(tmp_path, "0-mvp", 1)
+    escalated = read_ruling(tmp_path)
+    assert escalated["score"] == 92
+    assert escalated["verdict"] == "Escalate"
+
+    other_root = tmp_path / "ready-low-score"
+    manifest = ingest_fixture(other_root)
+    for finding in manifest["findings"]:
+        finding["state"] = "rejected"
+    for number in range(20):
+        template = dict(manifest["findings"][0])
+        template.update(
+            id=f"F-{100 + number:03d}",
+            severity="minor",
+            state="unresolved",
+            history=[],
+        )
+        manifest["findings"].append(template)
+    manifest["cycles"] = [{"cycle": 1}, {"cycle": 2}]
+    manifest["currentCycle"] = 2
+    remediate.save_manifest(other_root, "0-mvp", manifest)
+    seed_fix_phase(other_root, cycle=2)
+
+    remediate.cmd_rule(other_root, "0-mvp", 2)
+    ready = read_ruling(other_root, cycle=2)
+    assert ready["score"] == 35
+    assert ready["verdict"] == "Ready"
+
+
+def test_rule_requires_human_escalates(tmp_path):
+    ingest_fixture(tmp_path)
+    write_triage(
+        tmp_path,
+        {"F-001": {"category": "design_issue", "evidence": "사람의 결정 필요"}},
+    )
+    remediate.cmd_apply_triage(tmp_path, "0-mvp", 1)
+    seed_fix_phase(tmp_path)
+
+    remediate.cmd_rule(tmp_path, "0-mvp", 1)
+
+    ruling = read_ruling(tmp_path)
+    assert ruling["verdict"] == "Escalate"
+    assert ruling["gates"]["G2"] is False
+    assert "F-001" in " ".join(ruling["escalationReasons"])
+
+
+def test_rule_rejects_major_resolved_without_closure_history(tmp_path):
+    manifest = ingest_fixture(tmp_path)
+    for finding in manifest["findings"]:
+        finding["state"] = "rejected"
+    finding = finding_by_id(manifest, "F-001")
+    finding["state"] = "resolved"
+    finding["history"] = [
+        {
+            "cycle": 1,
+            "from": "accepted",
+            "to": "resolved",
+            "by": "implementation",
+            "evidence": "self-reported",
+            "at": "2026-07-24T18:00:00+0900",
+        }
+    ]
+    remediate.save_manifest(tmp_path, "0-mvp", manifest)
+    seed_fix_phase(tmp_path)
+
+    remediate.cmd_rule(tmp_path, "0-mvp", 1)
+
+    ruling = read_ruling(tmp_path)
+    assert ruling["verdict"] == "Escalate"
+    assert ruling["gates"]["G5"] is False
+    assert "F-001" in " ".join(ruling["escalationReasons"])
+
+
+@pytest.mark.parametrize(
+    ("steps", "completed_at"),
+    [
+        ([{"step": 0, "name": "fix", "status": "error"}], "2026-07-24T18:00:00+0900"),
+        ([{"step": 0, "name": "fix", "status": "completed"}], None),
+    ],
+)
+def test_rule_incomplete_fix_phase_escalates(tmp_path, steps, completed_at):
+    prepare_ready_cycle(tmp_path)
+    seed_fix_phase(tmp_path, steps=steps, completed_at=completed_at)
+
+    remediate.cmd_rule(tmp_path, "0-mvp", 1)
+
+    ruling = read_ruling(tmp_path)
+    assert ruling["verdict"] == "Escalate"
+    assert ruling["gates"]["G4"] is False
+    if steps[0]["status"] == "error":
+        assert ruling["gates"]["G6"] is False
+
+
+def test_rule_cycle_cap_writes_escalation_and_returns_nonzero(tmp_path):
+    manifest = ingest_fixture(tmp_path)
+    manifest["currentCycle"] = 3
+    remediate.save_manifest(tmp_path, "0-mvp", manifest)
+
+    assert remediate.cmd_rule(tmp_path, "0-mvp", 3) != 0
+
+    ruling = read_ruling(tmp_path, cycle=3)
+    reason = "cycle cap exceeded: cycle 3 > maxCycles 2"
+    assert ruling["verdict"] == "Escalate"
+    assert ruling["escalationReasons"] == [reason]
+    manifest = remediate.load_manifest(tmp_path, "0-mvp")
+    assert manifest is not None
+    assert manifest["state"] == "escalated"

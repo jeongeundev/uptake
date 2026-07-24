@@ -529,6 +529,216 @@ def cmd_ingest_closure(
     return 0
 
 
+def _score(manifest: dict) -> int:
+    open_counts = {severity: 0 for severity in SEVERITIES}
+    recurrence_count = 0
+    for finding in manifest["findings"]:
+        if finding["state"] in {"unresolved", "accepted"}:
+            open_counts[finding["severity"]] += 1
+        if finding["state"] == "requires-human" and any(
+            entry.get("from") == "resolved"
+            and entry.get("to") == "requires-human"
+            for entry in finding["history"]
+        ):
+            recurrence_count += 1
+    cycles_used = max(len(manifest["cycles"]), manifest["currentCycle"])
+    value = (
+        100
+        - 8 * open_counts["major"]
+        - 15 * open_counts["blocker"]
+        - 3 * open_counts["minor"]
+        - open_counts["nit"]
+        - 10 * recurrence_count
+        - 5 * max(0, cycles_used - 1)
+    )
+    return max(0, min(100, value))
+
+
+def _record_ruling(
+    root: Path,
+    loop_id: str,
+    cycle: int,
+    manifest: dict,
+    ruling: dict,
+) -> None:
+    cycle_directory = root / "remediation" / loop_id / f"cycle-{cycle}"
+    cycle_directory.mkdir(parents=True, exist_ok=True)
+    (cycle_directory / "ruling.json").write_text(
+        json.dumps(ruling, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+    cycle_entry = next(
+        (item for item in manifest["cycles"] if item.get("cycle") == cycle), None
+    )
+    if cycle_entry is None:
+        cycle_entry = {
+            "cycle": cycle,
+            "fixPhase": f"{loop_id}-fix-c{cycle}",
+            "review": None,
+            "closureReview": None,
+        }
+        manifest["cycles"].append(cycle_entry)
+    cycle_entry["verdict"] = ruling["verdict"]
+    cycle_entry["reasons"] = ruling["escalationReasons"]
+    manifest["state"] = (
+        "ready" if ruling["verdict"] == "Ready" else "escalated"
+    )
+    save_manifest(root, loop_id, manifest)
+
+
+def cmd_rule(root: Path | str, loop_id: str, cycle: int) -> int:
+    root = Path(root)
+    manifest = load_manifest(root, loop_id)
+    if manifest is None:
+        raise ValueError(f"manifest not found for loop '{loop_id}'")
+
+    open_findings = [
+        finding["id"]
+        for finding in manifest["findings"]
+        if finding["state"] in ACTIVE_STATES
+    ]
+    deferred = [
+        {
+            "id": finding["id"],
+            "title": finding["title"],
+            "routedTo": finding.get("routedTo"),
+        }
+        for finding in manifest["findings"]
+        if finding["state"] == "deferred"
+    ]
+    cap_reason = (
+        f"cycle cap exceeded: cycle {cycle} > maxCycles {manifest['maxCycles']}"
+    )
+    if cycle > manifest["maxCycles"]:
+        gates = {
+            gate: False for gate in ("G1", "G2", "G3", "G4", "G5", "G6")
+        }
+        ruling = {
+            "loopId": loop_id,
+            "cycle": cycle,
+            "verdict": "Escalate",
+            "gates": gates,
+            "failedGates": [
+                {"id": gate, "reason": cap_reason} for gate in gates
+            ],
+            "escalationReasons": [cap_reason],
+            "score": _score(manifest),
+            "openFindings": open_findings,
+            "deferredToImplementation": deferred,
+            "createdAt": stamp(),
+            "readyForHandoff": False,
+            "handoff": None,
+        }
+        _record_ruling(root, loop_id, cycle, manifest, ruling)
+        print(f"Escalate: {cap_reason}")
+        return 1
+
+    blocking_major = [
+        finding["id"]
+        for finding in manifest["findings"]
+        if finding["severity"] in {"blocker", "major"}
+        and finding["state"] in {"unresolved", "accepted"}
+    ]
+    requires_human = [
+        finding["id"]
+        for finding in manifest["findings"]
+        if finding["state"] == "requires-human"
+    ]
+    findings_by_id = {
+        finding["id"]: finding for finding in manifest["findings"]
+    }
+    invalid_major = []
+    for finding in manifest["findings"]:
+        if finding["severity"] not in {"blocker", "major"}:
+            continue
+        if finding["state"] == "deferred":
+            continue
+        if finding["state"] in {"resolved", "rejected"}:
+            continue
+        if finding["state"] == "duplicate":
+            canonical = findings_by_id.get(finding.get("canonicalId"))
+            if canonical is not None and canonical["state"] in {
+                "resolved",
+                "rejected",
+            }:
+                continue
+        invalid_major.append(finding["id"])
+
+    fix_index_path = (
+        root / "phases" / f"{loop_id}-fix-c{cycle}" / "index.json"
+    )
+    fix_index = None
+    try:
+        fix_index = json.loads(fix_index_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        pass
+    steps = fix_index.get("steps", []) if isinstance(fix_index, dict) else []
+    g4 = (
+        isinstance(fix_index, dict)
+        and bool(fix_index.get("completed_at"))
+        and not any(
+            step.get("status") in {"error", "blocked"} for step in steps
+        )
+    )
+    resolved_without_closure = [
+        finding["id"]
+        for finding in manifest["findings"]
+        if finding["severity"] in {"blocker", "major"}
+        and finding["state"] == "resolved"
+        and not any(
+            entry.get("to") == "resolved" and entry.get("by") == "closure"
+            for entry in finding["history"]
+        )
+    ]
+    gates = {
+        "G1": not blocking_major,
+        "G2": not requires_human,
+        "G3": not invalid_major,
+        "G4": g4,
+        "G5": not resolved_without_closure,
+        "G6": bool(steps)
+        and all(step.get("status") == "completed" for step in steps),
+    }
+    details = {
+        "G1": f"open blocker/major: {', '.join(blocking_major)}",
+        "G2": f"requires-human: {', '.join(requires_human)}",
+        "G3": f"non-terminal blocker/major: {', '.join(invalid_major)}",
+        "G4": f"fix phase incomplete: {fix_index_path}",
+        "G5": (
+            "resolved without closure: "
+            + ", ".join(resolved_without_closure)
+        ),
+        "G6": f"fix phase has non-completed steps: {fix_index_path}",
+    }
+    failed_gates = [
+        {"id": gate, "reason": details[gate]}
+        for gate, passed in gates.items()
+        if not passed
+    ]
+    verdict = "Ready" if all(gates.values()) else "Escalate"
+    escalation_reasons = [item["reason"] for item in failed_gates]
+    ruling = {
+        "loopId": loop_id,
+        "cycle": cycle,
+        "verdict": verdict,
+        "gates": gates,
+        "failedGates": failed_gates,
+        "escalationReasons": escalation_reasons,
+        "score": _score(manifest),
+        "openFindings": open_findings,
+        "deferredToImplementation": deferred,
+        "createdAt": stamp(),
+        "readyForHandoff": verdict == "Ready",
+        "handoff": None,
+    }
+    _record_ruling(root, loop_id, cycle, manifest, ruling)
+    if verdict == "Ready":
+        print("Ready")
+    else:
+        print(f"Escalate: {'; '.join(escalation_reasons)}")
+    return 0
+
+
 def cmd_status(root: Path | str, loop_id: str) -> int:
     manifest = load_manifest(root, loop_id)
     if manifest is None:
@@ -577,6 +787,11 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_closure.add_argument("--cycle", type=int, required=True)
     ingest_closure.add_argument("--root", type=Path, default=ROOT)
 
+    rule = subparsers.add_parser("rule")
+    rule.add_argument("loop_id")
+    rule.add_argument("--cycle", type=int, required=True)
+    rule.add_argument("--root", type=Path, default=ROOT)
+
     status = subparsers.add_parser("status")
     status.add_argument("loop_id")
     status.add_argument("--root", type=Path, default=ROOT)
@@ -596,6 +811,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_ingest_closure(
                 args.root, args.loop_id, args.review_path, args.cycle
             )
+        if args.command == "rule":
+            return cmd_rule(args.root, args.loop_id, args.cycle)
         return cmd_status(args.root, args.loop_id)
     except (OSError, ValueError, json.JSONDecodeError, KeyError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
