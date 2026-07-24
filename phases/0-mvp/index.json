@@ -13,7 +13,9 @@
     {
       "step": 1,
       "name": "pattern-schema",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-24T14:20:35+0900",
+      "summary": "src/types/pattern.ts — Pattern 5요소+2축 스키마 타입 정의 (Source/Provenance/Injection*/Pattern). 이후 전 레이어의 공유 계약"
     },
     {
       "step": 2,
