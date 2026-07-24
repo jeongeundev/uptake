@@ -17,7 +17,8 @@
     },
     {
       "dir": "remediate-loop",
-      "status": "pending"
+      "status": "completed",
+      "completed_at": "2026-07-24T17:11:10+0900"
     }
   ]
 }
