@@ -7,7 +7,8 @@
       "name": "manifest-ingest",
       "status": "completed",
       "summary": "scripts/remediate.py — fingerprint()·manifest I/O(단독기록)·ingest(§4 매칭: 신규/진행형/재발/불일치/중복). status 커맨드. test_remediate.py: ingest·중복제거·ID안정·스키마거부. review-1 fixture 5 findings→unresolved",
-      "started_at": "2026-07-24T16:57:24+0900"
+      "started_at": "2026-07-24T16:57:24+0900",
+      "completed_at": "2026-07-24T17:00:31+0900"
     },
     {
       "step": 1,
