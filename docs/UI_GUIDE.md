@@ -1,11 +1,57 @@
 # UI 디자인 가이드
 
-> ⚠️ UI는 아직 grilling으로 확정하지 않았다. 아래는 PRD의 "도구 미학 / 정직·서술적" 원칙에서 도출한 **잠정 출발점**이며, UI 작업 착수 시 재검토한다.
+> 이 문서는 phase 1 단일 페이지 UI의 확정 계약이다. 기존 엔진의 INSTANTIATE·VERIFY·승인·적용 계약을 사용자에게 정직하게 노출한다.
 
 ## 디자인 원칙
 1. **도구처럼 보여야 한다** — 매일 쓰는 로컬 대시보드. 마케팅 페이지가 아니다.
 2. **상태가 곧 UI다** — 화면의 무게중심은 VERIFY 결과(green 통과 / red 차단)와 diff. 색은 **의미**(통과 / 차단 / tentative / 출처)에만 쓴다.
-3. **정직·투명** — 실패를 숨기지 않는다. red는 결함이 아니라 정보다. provenance(출처 경로)는 항상 보이고 클릭 가능하게.
+3. **정직·투명** — 실패를 숨기지 않는다. red는 결함이 아니라 정보다. provenance(출처 경로)는 항상 로컬 근거 경로로 보이게 한다.
+
+## 단일 페이지 흐름
+
+wizard는 한 페이지에서 다음 순서로 진행한다.
+
+1. 카탈로그에서 패턴을 고른다.
+2. 사용자가 타깃 repo의 절대 경로를 입력한다.
+3. 자동 탐지된 결합점과 근거 파일을 확인하고, `binding-unresolved`인 결합점만 직접 입력한다. 빈 값이 남아 있으면 다음 단계로 진행할 수 없다.
+4. 생성물을 준비한 뒤 실행 명령을 확인한다.
+5. VERIFY 결과와 생성 diff를 검토한다.
+6. `awaiting-approval`일 때 명시적으로 승인하고 적용한다.
+
+사용자가 패턴, 타깃 경로 또는 결합점 입력을 바꾸면 그 이후의 서버측 생성·검증·승인 상태를 폐기하고 다시 준비한다. 새로고침이나 서버 재시작 뒤 진행 상태는 복구하지 않으며 재검증·재승인이 필요하다.
+
+## 카탈로그와 근거
+
+각 패턴에는 `capability`, `evidenceStatus`, `generationEnabled`, `tradeoffs`와 provenance 경로를 함께 표시한다. provenance는 웹 링크처럼 꾸미지 않고 검증된 로컬 근거 경로 텍스트로 표시한다.
+
+실제 source root가 없어 패턴이 하드 게이트에서 load 거부되면 빈 성공 화면을 보여주지 않는다. rejected reason인 `provenance-unresolved`를 표시해 사용자가 근거 부재와 빈 카탈로그를 구별할 수 있게 한다.
+
+## 실행 직전 공개
+
+`frozenArgv`는 shell 문자열로 합치지 않고 인자 경계를 보존한 목록으로 표시한다. 실행 버튼 바로 앞에 다음 세 항목을 함께 공개한다.
+
+- `frozenArgv`의 각 인자
+- cwd: 타깃 repo 밖의 임시 워크스페이스
+- timeout
+
+사용자가 **이식 실행**을 클릭하는 것이 공개된 명령 실행에 대한 승인이다. 결합점이나 생성물이 바뀌면 기존 공개 내용은 폐기하고 새 `frozenArgv`를 준비·표시한 뒤에만 실행한다.
+
+## 생성물과 diff
+
+생성물은 현재 엔진과 apply 계약 그대로 파일별 `add` operation으로 표시한다. 각 항목은 repo-상대 경로, 역할, 추가될 전체 내용을 포함한다. phase 1 UI는 기존 파일의 수정이나 삭제를 지원하거나 암시하지 않는다.
+
+## VERIFY 상태
+
+양성에서 gate test가 green이고 음성에서 같은 gate test가 red인 두 조건이 모두 성립해야만 전체 결과를 green으로 표시한다. `awaiting-approval`만 검증 성공이며 나머지 실행 결과는 모두 적용을 차단한다.
+
+| 상태 | 사용자 문구 | 색/행동 |
+|---|---|---|
+| `awaiting-approval` | 양성 green과 음성 red가 확인되었습니다. 승인 대기 중입니다. | green, 승인 가능 |
+| `positive-failed` | 준수 상태의 게이트가 통과하지 못했습니다. | red, 차단 |
+| `injection-failed` | 판별 위반을 생성물에 심지 못했습니다. | red, 차단 |
+| `gate-error` | 게이트가 판정 가능한 결과를 만들지 못했습니다. | red, 차단 |
+| `negative-not-caught` | 게이트가 심은 위반을 잡지 못했습니다. | red, 차단 |
+| `timeout` | 게이트 실행이 제한 시간을 초과했습니다. | red, 차단 |
 
 ## AI 슬롭 안티패턴 — 하지 마라
 | 금지 사항 | 이유 |
@@ -66,7 +112,7 @@ rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-3
 ### diff / 코드 / provenance 경로
 ```
 font-mono text-xs — diff, 생성 코드, 출처 파일 경로는 항상 모노스페이스로.
-provenance 경로는 클릭 가능(neutral-400 → hover neutral-200).
+provenance 경로는 로컬 근거 경로 텍스트(neutral-400)로 표시한다.
 ```
 
 ## 레이아웃
