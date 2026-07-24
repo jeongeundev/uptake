@@ -1,0 +1,19 @@
+{
+  "phases": [
+    {
+      "dir": "0-mvp",
+      "status": "completed",
+      "completed_at": "2026-07-24T14:48:53+0900"
+    },
+    {
+      "dir": "0-fix",
+      "status": "completed",
+      "completed_at": "2026-07-24T15:46:28+0900"
+    },
+    {
+      "dir": "0-fix2",
+      "status": "completed",
+      "completed_at": "2026-07-24T16:16:32+0900"
+    }
+  ]
+}

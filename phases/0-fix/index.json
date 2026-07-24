@@ -1,0 +1,24 @@
+{
+  "project": "uptake",
+  "phase": "0-fix",
+  "steps": [
+    {
+      "step": 0,
+      "name": "verify-contract",
+      "status": "completed",
+      "summary": "verify.ts — verify()를 prepareVerification()/executeVerification()로 분리(argv 실행 전 공개, AC-12 재확인). 양성 error/timeout을 gate-error/timeout으로 분류(Major1/AC-7b). verify.test.ts 갱신+양성error·argv공개 회귀 테스트",
+      "started_at": "2026-07-24T15:41:18+0900",
+      "completed_at": "2026-07-24T15:44:01+0900"
+    },
+    {
+      "step": 1,
+      "name": "verify-integration",
+      "status": "completed",
+      "summary": "src/__tests__/pipeline.integration.test.ts — mock 없는 실제 파이프라인(loadCatalog→detectBindings→instantiate→prepare/executeVerification 실제 vitest→applyGenerated). AC-5/6/7/9/10을 실제 subprocess로 실증(AC-11 엔진 부분). 씨앗 부재 시 사유 로그 후 skip",
+      "started_at": "2026-07-24T15:44:01+0900",
+      "completed_at": "2026-07-24T15:46:28+0900"
+    }
+  ],
+  "created_at": "2026-07-24T15:41:18+0900",
+  "completed_at": "2026-07-24T15:46:28+0900"
+}

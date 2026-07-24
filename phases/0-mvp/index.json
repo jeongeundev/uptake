@@ -1,0 +1,80 @@
+{
+  "project": "uptake",
+  "phase": "0-mvp",
+  "steps": [
+    {
+      "step": 0,
+      "name": "project-setup",
+      "status": "completed",
+      "started_at": "2026-07-24T14:18:02+0900",
+      "summary": "스캐폴딩 완료 — Next.js 15/TS strict/Tailwind/vitest, 디렉토리 구조, npm scripts(dev/build/lint/test), 스모크 테스트",
+      "completed_at": "2026-07-24T14:20:35+0900"
+    },
+    {
+      "step": 1,
+      "name": "pattern-schema",
+      "status": "completed",
+      "started_at": "2026-07-24T14:20:35+0900",
+      "summary": "src/types/pattern.ts — Pattern 5요소+2축 스키마 타입 정의 (Source/Provenance/Injection*/Pattern). 이후 전 레이어의 공유 계약",
+      "completed_at": "2026-07-24T14:21:23+0900"
+    },
+    {
+      "step": 2,
+      "name": "catalog-loader",
+      "status": "completed",
+      "started_at": "2026-07-24T14:21:23+0900",
+      "summary": "src/lib/catalog/load.ts + src/lib/provenance/resolve.ts — 층1 하드게이트(AC-1/2/2b) 로드 거부, git show 기반 provenance resolve, generationEnabled 계산. 스키마 세부 규칙: 소문자 kebab-case ID·배열 ID 중복 금지, unknown field 거부, POSIX 상대 정규 경로·40자리 commit SHA 강제, schemaVersion 1·patternId/파일명 일치, 오류 파일만 rejected 격리. loadCatalog(dir, sourceRoot)/resolveProvenance(source, prov, root) 시그니처",
+      "completed_at": "2026-07-24T14:27:38+0900"
+    },
+    {
+      "step": 3,
+      "name": "seed-catalog",
+      "status": "completed",
+      "started_at": "2026-07-24T14:27:38+0900",
+      "summary": "catalog/spec-change-declaration-gate.json — corroborated/generative 패턴 1개(backend.ai@ec253a6 + pytest@a53a4d9). roles: spec-artifact/spec-check/blocking-gate. oracle marker='/* @uptake:marker... */', gateTestId='declared-change-present'. step2 로더로 로드 통과",
+      "completed_at": "2026-07-24T14:29:57+0900"
+    },
+    {
+      "step": 4,
+      "name": "binding-detection",
+      "status": "completed",
+      "started_at": "2026-07-24T14:29:57+0900",
+      "summary": "src/lib/engine/detect.ts — detectBindings(pattern, targetRoot): BindingDetection[] (detected+evidence / binding-unresolved / user-provided). checker=vitest 탐지, gate-location=vitest.config 탐지, spec-format·naming은 타깃에 관습 없으면 unresolved. fixture: tests/fixtures/target-vitest, tests/fixtures/target-no-runner",
+      "completed_at": "2026-07-24T14:33:28+0900"
+    },
+    {
+      "step": 5,
+      "name": "instantiate",
+      "status": "completed",
+      "started_at": "2026-07-24T14:33:29+0900",
+      "summary": "src/lib/engine/instantiate.ts — instantiate(pattern, bindings): 고정 템플릿 생성(declared-changes.ts + spec-gate.test.ts, uptake-gate/). marker는 패턴 oracle에서 읽어 spec-artifact에 1회 심기, InstantiatedInjection 동시 산출, gateTestId='declared-change-present'. 소프트게이트(AC-3), injection-failed 검사. LLM 미사용·GeneratedFile[] 확정",
+      "completed_at": "2026-07-24T14:36:40+0900"
+    },
+    {
+      "step": 6,
+      "name": "gate-runner",
+      "status": "completed",
+      "started_at": "2026-07-24T14:36:40+0900",
+      "summary": "src/services/gate-runner.ts — runGate(argv, cwd, timeoutMs): GateOutcome. vitest JSON reporter 파싱으로 ran(perTest 전체)/error(리포터 미산출) 판정, exit code 아님. 고정argv·shell없음·cwd한정·timeout·env허용목록·UTF-8 로그전문보존. gateTestId 미인지(step7이 해석). AC-7b/AC-12 테스트 통과. env목록=CI=1·NODE_ENV=test·PATH/TMPDIR/TEMP/TMP/SystemRoot/ComSpec/PATHEXT만 상속(.env 미상속), timeout기본=30000ms(DEFAULT_GATE_TIMEOUT_MS), cleanup=워크스페이스 미소유·로그는 원문 접근을 위해 보존(step7이 라이프사이클 결정)",
+      "completed_at": "2026-07-24T14:41:19+0900"
+    },
+    {
+      "step": 7,
+      "name": "verify-orchestrator",
+      "status": "completed",
+      "started_at": "2026-07-24T14:41:19+0900",
+      "summary": "src/lib/engine/verify.ts — verify(pattern, generated, bindings, targetRoot): W_pos/W_neg 라이프사이클, runGate 2회 호출, gateTestId 해석(양성 passed·음성 failed 대조), error→gate-error/timeout(AC-7b), 음성 green→negative-not-caught(AC-8), injection 순수치환·marker 1회, argv 동결(AC-12), 타깃 불변(AC-5). hashGenerated 유틸(step8 재사용). 워크스페이스=tracked만·install 없음",
+      "completed_at": "2026-07-24T14:46:15+0900"
+    },
+    {
+      "step": 8,
+      "name": "apply",
+      "status": "completed",
+      "started_at": "2026-07-24T14:46:15+0900",
+      "summary": "src/lib/engine/apply.ts — applyGenerated(approval, files, targetRoot): 해시 재확인(diff-mismatch)·base 확인(base-changed)·승인결속(AC-10)·부분쓰기 롤백. hashGenerated 공유유틸(step7과 동일). ApprovalRecord=산출물해시+base해시+argv 결속. base는 .git 제외 전체 작업트리 경로·타입·내용 SHA-256. 세션/토큰·API route는 phase1 유예. AC-9/10 통과",
+      "completed_at": "2026-07-24T14:48:53+0900"
+    }
+  ],
+  "created_at": "2026-07-24T14:18:02+0900",
+  "completed_at": "2026-07-24T14:48:53+0900"
+}

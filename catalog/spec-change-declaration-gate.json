@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "patternId": "spec-change-declaration-gate",
+  "name": "변경 선언 게이트 (Change Declaration Gate)",
+  "capability": "generative",
+  "evidenceStatus": "corroborated",
+  "intent": "선언되지 않은 변경의 병합을 막는다 — 모든 실질 변경은 사람이 읽는 선언 파일로 기록되고, 기계 검사가 그 존재를 강제한다.",
+  "roles": [
+    {
+      "id": "spec-artifact",
+      "description": "변경을 사람이 읽는 형태로 선언하는 파일"
+    },
+    {
+      "id": "spec-check",
+      "description": "선언 파일의 존재·형식을 기계적으로 검사하는 규칙"
+    },
+    {
+      "id": "blocking-gate",
+      "description": "검사가 실패하면 병합/커밋을 차단하는 게이트"
+    }
+  ],
+  "bindingPoints": [
+    {
+      "id": "spec-format",
+      "description": "선언 파일 형식 (md / rst / …)",
+      "kind": "spec-format"
+    },
+    {
+      "id": "checker",
+      "description": "검사 도구 (towncrier.check / pre-commit 정규식 / vitest …)",
+      "kind": "checker"
+    },
+    {
+      "id": "gate-location",
+      "description": "게이트 위치 (CI workflow / pre-commit hook / …)",
+      "kind": "gate-location"
+    },
+    {
+      "id": "naming",
+      "description": "선언 파일 네이밍 규약 (`<번호>.<type>.<ext>`)",
+      "kind": "naming"
+    }
+  ],
+  "sources": [
+    {
+      "id": "backendai",
+      "repository": "github.com/lablup/backend.ai",
+      "revision": "ec253a618baa6a5a8f12885426c3ea7b8c2dea03",
+      "stack": "python/towncrier+gha",
+      "isTargetStack": false,
+      "independenceGroup": "lablup-backendai",
+      "independenceNote": "lablup 조직 단독 유지. pytest와 fork·스캐폴딩 템플릿 관계 없음. 검사 도구(towncrier.check)와 게이트 위치(GitHub Actions PR job)가 pytest와 다르다. 단 towncrier 도구는 공유한다(tradeoffs에 명시)."
+    },
+    {
+      "id": "pytest",
+      "repository": "github.com/pytest-dev/pytest",
+      "revision": "a53a4d99c4ded7f30b712d57068d92243a731ce7",
+      "stack": "python/towncrier+pre-commit",
+      "isTargetStack": false,
+      "independenceGroup": "pytest-dev",
+      "independenceNote": "pytest-dev 조직. lablup과 무관한 별개 프로젝트. 검사가 pre-commit 정규식(language: fail), 게이트가 pre-commit hook이라 backend.ai(GHA)와 결합점이 다르다."
+    }
+  ],
+  "provenance": [
+    {
+      "sourceId": "backendai",
+      "path": "changes/12359.feature.md",
+      "observedRole": "spec-artifact"
+    },
+    {
+      "sourceId": "pytest",
+      "path": "changelog/12624.improvement.rst",
+      "observedRole": "spec-artifact"
+    },
+    {
+      "sourceId": "backendai",
+      "path": ".github/workflows/timeline-check.yml",
+      "observedRole": "spec-check"
+    },
+    {
+      "sourceId": "pytest",
+      "path": ".pre-commit-config.yaml",
+      "observedRole": "spec-check"
+    },
+    {
+      "sourceId": "backendai",
+      "path": ".github/workflows/timeline-check.yml",
+      "observedRole": "blocking-gate"
+    },
+    {
+      "sourceId": "pytest",
+      "path": ".pre-commit-config.yaml",
+      "observedRole": "blocking-gate"
+    }
+  ],
+  "oracle": {
+    "violation": "선언 목록이 비어(선언 누락) 있는데도 게이트가 통과하는 상태. 올바른 이식은 이를 red로 거부해야 한다.",
+    "gateTestId": "declared-change-present",
+    "injection": {
+      "operation": "replace",
+      "targetRole": "spec-artifact",
+      "marker": "/* @uptake:marker:begin */ \"seed-change\" /* @uptake:marker:end */",
+      "replacement": ""
+    },
+    "expect": "red"
+  },
+  "tradeoffs": "관찰 대상은 둘 다 성숙한 성공 OSS다(생존자 편향 — 이 관습이 성공의 원인이라는 보장은 없다). 두 씨앗 모두 Python이고 towncrier를 공유한다: 스택-불변 본질(선언→검사→차단)은 대조로 확인됐으나, '변경을 fragment 파일로 선언한다'는 구체 형태가 towncrier 생태계의 공통 관습일 가능성은 배제하지 못한다. 다만 검사 도구·게이트 위치가 서로 다른 것(towncrier.check+GHA vs pre-commit 정규식+hook)이 '복사가 아님'의 기계적 증거다."
+}
