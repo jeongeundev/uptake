@@ -22,7 +22,8 @@
     },
     {
       "dir": "1-ui-vertical-slice",
-      "status": "pending"
+      "status": "completed",
+      "completed_at": "2026-07-24T18:17:59+0900"
     }
   ]
 }
