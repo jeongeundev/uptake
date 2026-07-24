@@ -8,6 +8,9 @@ tsconfig.tsbuildinfo
 __pycache__/
 .pytest_cache/
 
+# 씨앗 repo (provenance resolve용 로컬 소스 — 커밋 대상 아님)
+.uptake/sources/
+
 # phase execution outputs
 phases/**/phase*-output.json
 phases/**/step*-output.json

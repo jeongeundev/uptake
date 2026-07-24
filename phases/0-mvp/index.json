@@ -1,0 +1,15 @@
+{
+  "project": "uptake",
+  "phase": "0-mvp",
+  "steps": [
+    { "step": 0, "name": "project-setup", "status": "pending" },
+    { "step": 1, "name": "pattern-schema", "status": "pending" },
+    { "step": 2, "name": "catalog-loader", "status": "pending" },
+    { "step": 3, "name": "seed-catalog", "status": "pending" },
+    { "step": 4, "name": "binding-detection", "status": "pending" },
+    { "step": 5, "name": "instantiate", "status": "pending" },
+    { "step": 6, "name": "gate-runner", "status": "pending" },
+    { "step": 7, "name": "verify-orchestrator", "status": "pending" },
+    { "step": 8, "name": "apply", "status": "pending" }
+  ]
+}
