@@ -4,6 +4,10 @@ out/
 next-env.d.ts
 tsconfig.tsbuildinfo
 
+# python
+__pycache__/
+.pytest_cache/
+
 # phase execution outputs
 phases/**/phase*-output.json
 phases/**/step*-output.json

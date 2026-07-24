@@ -22,11 +22,11 @@
         ]
       },
       {
-        "matcher": "Edit|Write",
+        "matcher": "apply_patch",
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/hooks/tdd-guard.sh\""
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/hooks/tdd-guard.sh\""
           }
         ]
       }
