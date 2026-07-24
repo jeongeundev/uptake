@@ -39,7 +39,8 @@
       "name": "binding-detection",
       "status": "completed",
       "started_at": "2026-07-24T14:29:57+0900",
-      "summary": "src/lib/engine/detect.ts — detectBindings(pattern, targetRoot): BindingDetection[] (detected+evidence / binding-unresolved / user-provided). checker=vitest 탐지, gate-location=vitest.config 탐지, spec-format·naming은 타깃에 관습 없으면 unresolved. fixture: tests/fixtures/target-vitest, tests/fixtures/target-no-runner"
+      "summary": "src/lib/engine/detect.ts — detectBindings(pattern, targetRoot): BindingDetection[] (detected+evidence / binding-unresolved / user-provided). checker=vitest 탐지, gate-location=vitest.config 탐지, spec-format·naming은 타깃에 관습 없으면 unresolved. fixture: tests/fixtures/target-vitest, tests/fixtures/target-no-runner",
+      "completed_at": "2026-07-24T14:33:28+0900"
     },
     {
       "step": 5,
