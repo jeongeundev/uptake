@@ -1,0 +1,47 @@
+{
+  "reviewId": "review-2",
+  "round": 2,
+  "kind": "closure",
+  "target": {
+    "phase": "0-mvp",
+    "branch": "feat-0-mvp",
+    "baseCommit": "c75691c"
+  },
+  "reviewer": "codex",
+  "createdAt": "2026-07-24T15:50:00+0900",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "title": "양성 error taxonomy 오분류",
+      "detail": "재검토: verify.ts가 prepareVerification/executeVerification으로 분리됐고, 양성 error에 errorStatus()가 적용돼 gate-error/timeout으로 분류된다. 회귀 테스트(양성 timeout→timeout, 양성 error→gate-error) 통과.",
+      "evidence": { "files": ["src/lib/engine/verify.ts"], "spec": ["AC-7b"] },
+      "suggestedFix": null,
+      "suggestedCategory": "contract_violation",
+      "reviewerConfidence": "high",
+      "closureVerdict": "resolved"
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "title": "argv를 실행 전에 공개할 수 없는 구조",
+      "detail": "재검토: prepareVerification이 실행 없이 frozenArgv를 반환하고, executeVerification이 표시된 argv와 다르면 실행을 거부한다. monolithic verify() 제거됨. AC-12 구조 강제 확인.",
+      "evidence": { "files": ["src/lib/engine/verify.ts"], "spec": ["AC-12"] },
+      "suggestedFix": null,
+      "suggestedCategory": "implementation_bug",
+      "reviewerConfidence": "high",
+      "closureVerdict": "resolved"
+    },
+    {
+      "id": "F-003",
+      "severity": "major",
+      "title": "runGate 전역 mock으로 실제 파이프라인 미검증",
+      "detail": "재검토: pipeline.integration.test.ts가 runGate mock 없이 실제 vitest subprocess로 loadCatalog→detectBindings→instantiate→prepare/executeVerification→applyGenerated를 실행한다. 음성이 실제 위반 삽입으로 red가 됨. 씨앗 있으면 실제 실행.",
+      "evidence": { "files": ["src/lib/engine/verify.test.ts"], "spec": ["AC-11"] },
+      "suggestedFix": null,
+      "suggestedCategory": "test_gap",
+      "reviewerConfidence": "high",
+      "closureVerdict": "resolved"
+    }
+  ]
+}

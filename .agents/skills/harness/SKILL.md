@@ -154,3 +154,16 @@ execute.py가 자동으로 처리하는 것:
 
 - **error 발생 시**: `phases/{task-name}/index.json`에서 해당 step의 `status`를 `"pending"`으로 바꾸고 `error_message`를 삭제한 뒤 재실행한다.
 - **blocked 발생 시**: `blocked_reason`에 적힌 사유를 해결한 뒤, `status`를 `"pending"`으로 바꾸고 `blocked_reason`을 삭제한 뒤 재실행한다.
+
+### F. 구현 결과 검토 (Claude 자기점검)
+
+Phase가 completed로 끝나면 Claude가 구현 결과를 **한 번** 검토한다. 이것은 구현자 측 **자기점검**이지 독립 리뷰가 아니다 — 깊은 적대적 리뷰는 `/remediate` 입구의 **독립 Codex 리뷰**가 맡는다. 둘을 겹치지 마라.
+
+점검 항목:
+
+1. **설계 의도 부합** — step 문서가 요구한 것과 실제 산출물이 일치하는가? `git diff`로 변경 범위를 확인한다.
+2. **AC 증거** — 각 step의 `index.json` summary와 `output.json`에서 AC(build/test)가 실제로 통과했는지 본다. green만 보고 넘어가지 말고 성공 위장이 없는지 확인한다(ADR-008 정신).
+3. **CRITICAL 규칙** — AGENTS.md의 CRITICAL 규칙 위반이 없는가?
+4. **범위 이탈** — step에 없던 파일·기능이 생기지 않았는가?
+
+발견한 문제는 사용자에게 보고한다. 표면적 수정이면 이 자리에서 고치고, **구조적이거나 finding이 여러 건이면 `/remediate` 루프로 넘긴다**(독립 리뷰 → triage → fix phase → 재리뷰 → Ready/Escalate).

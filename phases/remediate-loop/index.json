@@ -1,0 +1,11 @@
+{
+  "project": "uptake",
+  "phase": "remediate-loop",
+  "steps": [
+    { "step": 0, "name": "manifest-ingest", "status": "pending" },
+    { "step": 1, "name": "triage", "status": "pending" },
+    { "step": 2, "name": "closure", "status": "pending" },
+    { "step": 3, "name": "rule", "status": "pending" },
+    { "step": 4, "name": "acceptance-e2e", "status": "pending" }
+  ]
+}
