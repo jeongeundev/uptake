@@ -1,0 +1,8 @@
+{
+  "project": "uptake",
+  "phase": "0-fix2",
+  "steps": [
+    { "step": 0, "name": "approval-store", "status": "pending" },
+    { "step": 1, "name": "integration-gate", "status": "pending" }
+  ]
+}
