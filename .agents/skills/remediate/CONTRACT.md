@@ -8,14 +8,14 @@
 
 ```
 implementation complete
-→ review artifact 입력            (reviews/review-N.json — 사람/Codex가 생성, v1은 수동)
+→ 독립 full review 생성/입력      (branch 입력이면 reviewer agent가 reviews/review-1.json 생성)
 → finding 구조화 + triage(분류)    (remediate.py ingest + Claude가 category 판정)
    ├─ bug/contract/test  → remediation fix phase (이 루프)
    ├─ missing_feature     → deferred → 새 구현 phase(/harness로 넘김, 이 루프 밖)
    └─ design_issue        → requires-human (ADR/사람, escalate)
 → (remediation 대상만) fix phase 생성  (Claude가 phases/{loop}-fix-cN 직접 작성)
 → execute.py로 수정                (기존 execute.py 그대로 호출)
-→ closure review용 packet 생성      (remediate.py closure-packet)
+→ 독립 closure review               (새 reviewer agent가 packet 범위만 재검토)
 → Ready 또는 Escalate 판정          (remediate.py rule — hard gate + 자문 score)
 ```
 
@@ -41,13 +41,16 @@ implementation complete
 | 주체 | 책임 | 하지 않는 것 |
 |------|------|------------|
 | `remediate.py` (결정적 스크립트) | ID 부여·fingerprint·manifest 기록·상태 전이 검증·hard gate·score·중단조건 | LLM 판단(triage), step 문서 작성 |
-| Claude 메인 에이전트 (`/remediate` 스킬) | finding 검증·triage 결정(근거 필수)·remediation step 작성·클로저 해석 | manifest 직접 편집 |
+| Codex 메인 에이전트 (`/remediate` 스킬) | 대상 확정·reviewer agent 오케스트레이션·finding 검증·triage·remediation step 작성 | manifest 직접 편집, 독립 리뷰 대행 |
+| Codex reviewer agent | full 또는 closure review 한 종류만 독립 수행 | 구현·triage·파일 수정 |
 | Codex 서브에이전트 (`execute.py`) | fix phase 구현 | triage·판정 |
 
 - **INV-1 (단독 기록자):** `manifest.json`은 `remediate.py`만 쓴다. Claude는 `cycle-N/triage.json`으로 의사만 전달하고, 스크립트가 검증 후 반영한다. (execute.py가 index.json 단독 기록자인 것과 동형.)
 - **INV-2 (무검증 수용 금지):** finding을 `rejected`로 옮기려면 비어있지 않은 `evidence`가 필요하다. 근거 없는 rejection은 스크립트가 거부한다.
 - **INV-3 (자기주장 금지):** `resolved`는 **클로저 리뷰**(`ingest-closure`)로만 도달한다. fix 구현자가 스스로 resolved로 만들 수 없다.
 - **INV-4 (점수 불가침):** quality score는 어떤 hard gate도 덮지 못한다. Ready는 hard gate 전부 통과가 **필요충분**.
+- **INV-5 (리뷰 독립성):** full reviewer, fix 구현자, closure reviewer는 서로 다른 agent context여야 한다.
+- **INV-6 (브랜치 보존):** branch 입력 remediation의 fix는 manifest target branch에서 실행한다. runner가 별도 fix branch를 만들면 안 된다.
 
 ## 2. 디렉터리 레이아웃
 
@@ -62,13 +65,13 @@ remediation/{loop-id}/
     closure-packet.md          # 생성물: 사이클 1이 고친 finding만 재검토용
     ruling.json                # 생성물: Ready | Escalate + gate 결과 + score
   cycle-2/ ...
-phases/{loop-id}-fix-c1/       # 실제 수정 = 일반 하네스 phase (execute.py가 실행). 0-fix 선례 그대로.
+phases/{loop-id}-fix-c1/       # 실제 수정 = execute.py --current-branch가 target branch에서 실행.
 phases/{loop-id}-fix-c2/
 ```
 
 `loop-id`는 remediation 대상 구현을 가리킨다(예: `0-mvp`).
 
-## 3. review 아티팩트 스키마 (입력: `reviews/review-N.json`)
+## 3. review 아티팩트 스키마 (reviewer agent 생성 또는 사용자 입력)
 
 ```jsonc
 {
@@ -137,6 +140,7 @@ phases/{loop-id}-fix-c2/
 unresolved  --triage-->           accepted | deferred | rejected(근거필수) | duplicate(canonical필수) | requires-human
 accepted    --ingest-closure-->   resolved            (closureVerdict=resolved)
 accepted    --ingest-closure-->   accepted            (closureVerdict=still-open; 다음 사이클로)
+accepted    --next-cycle-->       accepted            (currentCycle만 +1)
 resolved    --ingest(재발)-->      requires-human      (fingerprint 재출현)
 rejected    --ingest(불일치)-->    requires-human      (fingerprint 재출현)
 ```
@@ -238,9 +242,9 @@ severity 불변, closureVerdict ∈ {"resolved","still-open"}.
 | G1 | severity ∈ {blocker,major} 중 상태가 `unresolved`/`accepted`인 finding 0건 |
 | G2 | 상태 `requires-human` finding 0건 |
 | G3 | 모든 blocker/major finding이 `resolved`/`rejected`/`duplicate`(canonical이 resolved/rejected) |
-| G4 | 최신 fix phase(`phases/{loop}-fix-cN`)의 index.json 상태가 `completed` |
+| G4 | remediation category finding이 한 건도 없거나, 최신 fix phase(`phases/{loop}-fix-cN`)의 index.json 상태가 `completed` |
 | G5 | `resolved`인 blocker/major는 모두 클로저 리뷰 verdict `resolved`를 근거로 함(history에 `by:"closure"`) |
-| G6 | 최신 fix phase의 모든 step이 `completed`(G4 재확인 — AC 실행 성공) |
+| G6 | remediation category finding이 한 건도 없거나, 최신 fix phase의 모든 step이 `completed`(G4 재확인 — AC 실행 성공) |
 
 - 판정: **모든 gate 통과 → `Ready`**. 하나라도 실패 → `Escalate`.
 - `Ready`여도 minor/nit 잔존은 허용(보고만).
@@ -342,6 +346,7 @@ python3 scripts/remediate.py ingest        <loop-id> <review.json>
 python3 scripts/remediate.py apply-triage   <loop-id> --cycle N        # cycle-N/triage.json 읽어 반영
 python3 scripts/remediate.py closure-packet <loop-id> --cycle N        # cycle-N/closure-packet.md 생성
 python3 scripts/remediate.py ingest-closure <loop-id> <review.json> --cycle N
+python3 scripts/remediate.py next-cycle    <loop-id> --cycle N        # still-open이 있고 cap 미만일 때 다음 cycle
 python3 scripts/remediate.py rule           <loop-id> --cycle N        # cycle-N/ruling.json 생성 + verdict 출력
 python3 scripts/remediate.py status         <loop-id>                  # manifest 요약 출력 (선택)
 ```
@@ -353,9 +358,9 @@ python3 scripts/remediate.py status         <loop-id>                  # manifes
 - `ingest`/`apply-triage`/`ingest-closure`/`rule`은 manifest를 원자적으로 갱신한다.
 - 타임스탬프는 KST(+09:00), execute.py와 동일 형식.
 
-## 11. 확장 지점 (decision 9 — v1 범위 밖, seam만 남긴다)
+## 11. 자동화 경계
 
-- `reviews/review-N.json`이 리뷰 에이전트 자동 호출의 seam. v1은 수동 생성, 향후 리뷰 에이전트가 같은 스키마로 출력.
+- branch/phase가 입력되면 `/remediate`가 독립 reviewer agent를 호출해 `reviews/review-N.json`을 생성한다. 기존 JSON 입력도 지원한다.
 - `ruling.json`의 `readyForHandoff`/`handoff` 슬롯 + manifest의 branch·baseCommit·resolved 목록이 auto-commit/PR 생성기의 입력.
 - CLI 서브커맨드 구조에 향후 `handoff` 추가.
-- **v1은 auto-commit·PR 생성을 구현하지 않는다.**
+- auto-push·PR 생성은 구현하지 않는다.

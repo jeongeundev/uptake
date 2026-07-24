@@ -500,6 +500,24 @@ def test_rule_ready_with_resolved_major_and_deferred_findings(tmp_path, capsys):
     assert manifest["cycles"][0]["verdict"] == "Ready"
 
 
+def test_rule_ready_without_fix_phase_when_review_has_no_accepted_findings(
+    tmp_path, capsys
+):
+    review = json.loads(REVIEW_FIXTURE.read_text(encoding="utf-8"))
+    review["findings"] = []
+    review_path = tmp_path / "empty-review.json"
+    review_path.write_text(json.dumps(review), encoding="utf-8")
+    remediate.cmd_ingest(tmp_path, "0-mvp", review_path)
+
+    assert remediate.cmd_rule(tmp_path, "0-mvp", 1) == 0
+
+    assert capsys.readouterr().out.strip().endswith("Ready")
+    ruling = read_ruling(tmp_path)
+    assert ruling["verdict"] == "Ready"
+    assert ruling["gates"]["G4"] is True
+    assert ruling["gates"]["G6"] is True
+
+
 def test_rule_open_blocker_escalates_and_names_finding(tmp_path):
     manifest = ingest_fixture(tmp_path)
     finding_by_id(manifest, "F-001")["severity"] = "blocker"
@@ -636,6 +654,36 @@ def test_rule_cycle_cap_writes_escalation_and_returns_nonzero(tmp_path):
     manifest = remediate.load_manifest(tmp_path, "0-mvp")
     assert manifest is not None
     assert manifest["state"] == "escalated"
+
+
+def test_next_cycle_advances_still_open_findings(tmp_path):
+    triage_fixture(tmp_path)
+    remediate.cmd_closure_packet(tmp_path, "0-mvp", 1)
+    closure = write_closure_review(
+        tmp_path,
+        {
+            "F-001": "still-open",
+            "F-002": "resolved",
+            "F-003": "resolved",
+        },
+    )
+    remediate.cmd_ingest_closure(tmp_path, "0-mvp", closure, 1)
+
+    assert remediate.cmd_next_cycle(tmp_path, "0-mvp", 1) == 0
+
+    manifest = remediate.load_manifest(tmp_path, "0-mvp")
+    assert manifest is not None
+    assert manifest["currentCycle"] == 2
+    assert manifest["state"] == "remediating"
+
+
+def test_next_cycle_rejects_cycle_cap(tmp_path):
+    manifest = ingest_fixture(tmp_path)
+    manifest["currentCycle"] = 2
+    remediate.save_manifest(tmp_path, "0-mvp", manifest)
+
+    with pytest.raises(ValueError, match="cycle cap"):
+        remediate.cmd_next_cycle(tmp_path, "0-mvp", 2)
 
 
 def test_real_two_review_cycle_reaches_ready_with_deferred_routing(tmp_path):

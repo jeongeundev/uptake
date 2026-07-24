@@ -529,6 +529,29 @@ def cmd_ingest_closure(
     return 0
 
 
+def cmd_next_cycle(root: Path | str, loop_id: str, cycle: int) -> int:
+    manifest = load_manifest(root, loop_id)
+    if manifest is None:
+        raise ValueError(f"manifest not found for loop '{loop_id}'")
+    if manifest["currentCycle"] != cycle:
+        raise ValueError(
+            f"cycle {cycle} does not match current cycle {manifest['currentCycle']}"
+        )
+    if cycle >= manifest["maxCycles"]:
+        raise ValueError(
+            f"cycle cap reached: cycle {cycle} >= maxCycles {manifest['maxCycles']}"
+        )
+    if not any(
+        finding["state"] == "accepted" for finding in manifest["findings"]
+    ):
+        raise ValueError("next cycle requires still-open accepted finding")
+
+    manifest["currentCycle"] = cycle + 1
+    manifest["state"] = "remediating"
+    save_manifest(root, loop_id, manifest)
+    return 0
+
+
 def _score(manifest: dict) -> int:
     open_counts = {severity: 0 for severity in SEVERITIES}
     recurrence_count = 0
@@ -673,11 +696,18 @@ def cmd_rule(root: Path | str, loop_id: str, cycle: int) -> int:
     except (OSError, json.JSONDecodeError):
         pass
     steps = fix_index.get("steps", []) if isinstance(fix_index, dict) else []
+    has_remediation_findings = any(
+        finding.get("category") in ACCEPTED_CATEGORIES
+        for finding in manifest["findings"]
+    )
     g4 = (
-        isinstance(fix_index, dict)
-        and bool(fix_index.get("completed_at"))
-        and not any(
-            step.get("status") in {"error", "blocked"} for step in steps
+        not has_remediation_findings
+        or (
+            isinstance(fix_index, dict)
+            and bool(fix_index.get("completed_at"))
+            and not any(
+                step.get("status") in {"error", "blocked"} for step in steps
+            )
         )
     )
     resolved_without_closure = [
@@ -696,8 +726,11 @@ def cmd_rule(root: Path | str, loop_id: str, cycle: int) -> int:
         "G3": not invalid_major,
         "G4": g4,
         "G5": not resolved_without_closure,
-        "G6": bool(steps)
-        and all(step.get("status") == "completed" for step in steps),
+        "G6": not has_remediation_findings
+        or (
+            bool(steps)
+            and all(step.get("status") == "completed" for step in steps)
+        ),
     }
     details = {
         "G1": f"open blocker/major: {', '.join(blocking_major)}",
@@ -787,6 +820,11 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_closure.add_argument("--cycle", type=int, required=True)
     ingest_closure.add_argument("--root", type=Path, default=ROOT)
 
+    next_cycle = subparsers.add_parser("next-cycle")
+    next_cycle.add_argument("loop_id")
+    next_cycle.add_argument("--cycle", type=int, required=True)
+    next_cycle.add_argument("--root", type=Path, default=ROOT)
+
     rule = subparsers.add_parser("rule")
     rule.add_argument("loop_id")
     rule.add_argument("--cycle", type=int, required=True)
@@ -811,6 +849,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_ingest_closure(
                 args.root, args.loop_id, args.review_path, args.cycle
             )
+        if args.command == "next-cycle":
+            return cmd_next_cycle(args.root, args.loop_id, args.cycle)
         if args.command == "rule":
             return cmd_rule(args.root, args.loop_id, args.cycle)
         return cmd_status(args.root, args.loop_id)

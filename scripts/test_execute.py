@@ -327,6 +327,14 @@ class TestUpdateTopIndex:
 # ---------------------------------------------------------------------------
 
 class TestCheckoutBranch:
+    def test_current_branch_mode_does_not_switch_branches(self, executor):
+        executor._use_current_branch = True
+        executor._run_git = MagicMock()
+
+        executor._checkout_branch()
+
+        executor._run_git.assert_not_called()
+
     def _mock_git(self, executor, responses):
         call_idx = {"i": 0}
         def fake_git(*args):
