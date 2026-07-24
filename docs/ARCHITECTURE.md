@@ -1,7 +1,7 @@
 # 아키텍처
 
 ## 제품 표면
-**로컬-우선으로 실행되는 Next.js 15 앱.** 사용자 머신에서 돌며, 서버측(route handlers / server actions, Node 런타임)이 파일시스템 접근·Anthropic SDK 호출·로컬 툴체인 실행(vitest via `child_process`)을 담당한다. 클라이언트는 카탈로그 탐색·결합점 확인·diff 검토·검증 결과 표시만 한다. 외부 백엔드 없음.
+**로컬-우선으로 실행되는 Next.js 15 앱.** 사용자 머신에서 돌며, phase 1의 노출 계층은 Node 런타임의 **Route Handler**다. Route Handler가 파일시스템 접근·Anthropic SDK 호출·로컬 툴체인 실행(vitest via `child_process`)을 서버측 엔진에 위임한다. 클라이언트는 카탈로그 탐색·결합점 확인·diff 검토·검증 결과 표시만 한다. 외부 백엔드 없음.
 
 ## 디렉토리 구조
 > 아래는 스캐폴딩의 목표 구조다. 착수 후 확정.
@@ -256,6 +256,14 @@ type Pattern = {
 - **서버 상태**(카탈로그·결합점 탐지·생성·검증·적용 결과)는 서버측에서 계산해 전달. 로컬-우선이라 원격 상태 저장소 없음.
 - **클라이언트 상태**(패턴 선택·diff 검토·UI상의 승인 조작)는 최소한의 로컬 상태(useState/useReducer)로.
 - **승인은 클라이언트 상태가 아니다.** 위의 "승인 여부"는 화면 조작일 뿐이고, 적용 API는 **클라이언트가 보낸 boolean을 신뢰하지 않는다.** 승인 레코드는 서버 프로세스 수명의 in-memory 저장소에 남으며 타깃 경로 · `patternId` · 산출물 해시 · 타깃 base 해시 · 동결된 argv에 결속된다. 검증 성공 시 발급한 불투명 `verificationId`를 명시적 승인 이벤트가 `pending`에서 `approved`로 전이하고, 적용은 이 ID를 한 번 소비해 `consumed`로 만든다. 프로세스 재시작 뒤에는 재검증·재승인이 필요하며, UI를 우회한 직접 API 호출이나 승인 ID 재사용으로 쓰는 경로는 없다(AC-10).
+- **HTTP 세션 소유권**: Route Handler가 불투명 session ID를 HttpOnly 쿠키로 발급하고, 서버측 in-memory workflow 저장소가 session ID와 workflow를 결속한다. 기존 `approval-store`의 엔진 계약은 바꾸지 않는다. workflow/API 계층이 `verificationId`가 현재 소유 세션의 workflow에서 발급된 것인지 확인한 뒤 승인·적용 엔진을 호출한다.
+- **수명**: workflow 상태는 서버 프로세스 수명에만 존재한다. 사용자가 이전 입력을 바꾸면 downstream 생성·검증·승인 상태를 폐기한다. 새로고침 진행 상태 복구와 서버 재시작 후 복구는 phase 1 비목표이며, 사용자는 재검증·재승인한다.
+
+## Phase 1 UI/API 결정
+
+- 사용자가 타깃 repo의 **절대 경로**를 입력한다. MVP 적격성은 해당 경로가 Git worktree이고 읽을 수 있는 `package.json`을 가지며 결합점 탐지로 vitest checker가 확인되는 경우로 한정한다. monorepo 자동 탐색과 의존성 설치는 하지 않는다.
+- 생성 산출물과 diff는 신규 파일별 `{ operation: "add", path, role, content }`로 표현한다. 기존 apply 계약대로 기존 파일 수정과 삭제는 지원하지 않는다.
+- 준비 응답은 `frozenArgv`의 인자 경계, 타깃 밖 임시 워크스페이스라는 cwd 설명, timeout을 실행 전에 제공한다. 공개된 argv와 실제 호출 argv가 같을 때만 VERIFY를 실행한다(AC-12).
 
 ## 보안·안전 (표적 수준)
 - **provenance 강제**: 모든 추출·생성 결과는 resolve 가능한 실재 소스 경로를 달아야 한다. resolve 안 되면 폐기.
@@ -277,11 +285,9 @@ type Pattern = {
 
 | 항목 | 확정 시점 |
 |---|---|
-| 생성 산출물·diff 표현 — 파일 목록 / unified diff / operation 중 무엇인지, 신규·수정·삭제 지원 범위 | INSTANTIATE 구현 |
 | hash 대상·알고리즘, 적용 직전 **타깃 base 상태** 확인, 부분 쓰기 실패 시 롤백 | apply 구현 (AC-9·AC-10) |
 | 워크스페이스 복제 범위 — tracked/untracked/ignored, `node_modules`, 의존성 설치 시점, 권한 비트 | VERIFY 실행기 구현 (AC-5) |
 | INSTANTIATE의 LLM 경계 — 고정 템플릿인지 LLM 생성인지, 모델 ID 고정, structured output, 재시도 | INSTANTIATE 구현 |
-| 타깃 적격성 규칙 — vitest 선재 여부, monorepo 대상 선택, 미충족 시 거부 상태 | 타깃 선택 구현 |
 | 환경변수 허용 목록, `.env` 취급, CI 플래그 | 게이트 실행기 구현 |
 | 상태 taxonomy 확장 — 단계별 timeout 구분, 사용자 조치 가능/불가 구분 | 상태 머신 구현 |
 | 생성물 provenance의 포터블 표현 — 패턴 JSON 동봉 / 주석에 source 직접 기재 / 별도 manifest | 이식 산출물 확정 시 |

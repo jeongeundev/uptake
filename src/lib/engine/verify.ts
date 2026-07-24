@@ -51,6 +51,10 @@ export type VerifyOutcome =
       frozenArgv: string[];
       positiveLog: string;
       negativeLog: string;
+      positivePreview: string;
+      positiveTruncated: boolean;
+      negativePreview: string;
+      negativeTruncated: boolean;
     }
   | {
       status:
@@ -345,6 +349,10 @@ export async function executeVerification(
       frozenArgv,
       positiveLog: positive.logPath,
       negativeLog: negative.logPath,
+      positivePreview: positive.outputPreview,
+      positiveTruncated: positive.outputTruncated,
+      negativePreview: negative.outputPreview,
+      negativeTruncated: negative.outputTruncated,
     };
   } catch (error) {
     return {

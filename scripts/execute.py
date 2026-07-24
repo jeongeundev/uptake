@@ -58,13 +58,20 @@ class StepExecutor:
     CHORE_MSG = "chore({phase}): step {num} output"
     TZ = timezone(timedelta(hours=9))
 
-    def __init__(self, phase_dir_name: str, *, auto_push: bool = False):
+    def __init__(
+        self,
+        phase_dir_name: str,
+        *,
+        auto_push: bool = False,
+        use_current_branch: bool = False,
+    ):
         self._root = str(ROOT)
         self._phases_dir = ROOT / "phases"
         self._phase_dir = self._phases_dir / phase_dir_name
         self._phase_dir_name = phase_dir_name
         self._top_index_file = self._phases_dir / "index.json"
         self._auto_push = auto_push
+        self._use_current_branch = use_current_branch
 
         if not self._phase_dir.is_dir():
             print(f"ERROR: {self._phase_dir} not found")
@@ -111,6 +118,9 @@ class StepExecutor:
         return subprocess.run(cmd, cwd=self._root, capture_output=True, text=True)
 
     def _checkout_branch(self):
+        if self._use_current_branch:
+            return
+
         branch = f"feat-{self._phase_name}"
 
         r = self._run_git("rev-parse", "--abbrev-ref", "HEAD")
@@ -395,7 +405,14 @@ class StepExecutor:
                 print(f"  ✓ {msg}")
 
         if self._auto_push:
-            branch = f"feat-{self._phase_name}"
+            if self._use_current_branch:
+                branch_result = self._run_git("rev-parse", "--abbrev-ref", "HEAD")
+                if branch_result.returncode != 0:
+                    print(f"\n  ERROR: 현재 브랜치를 확인하지 못했습니다.")
+                    sys.exit(1)
+                branch = branch_result.stdout.strip()
+            else:
+                branch = f"feat-{self._phase_name}"
             r = self._run_git("push", "-u", "origin", branch)
             if r.returncode != 0:
                 print(f"\n  ERROR: git push 실패: {r.stderr.strip()}")
@@ -411,9 +428,18 @@ def main():
     parser = argparse.ArgumentParser(description="Harness Step Executor")
     parser.add_argument("phase_dir", help="Phase directory name (e.g. 0-mvp)")
     parser.add_argument("--push", action="store_true", help="Push branch after completion")
+    parser.add_argument(
+        "--current-branch",
+        action="store_true",
+        help="Keep and modify the currently checked-out branch",
+    )
     args = parser.parse_args()
 
-    StepExecutor(args.phase_dir, auto_push=args.push).run()
+    StepExecutor(
+        args.phase_dir,
+        auto_push=args.push,
+        use_current_branch=args.current_branch,
+    ).run()
 
 
 if __name__ == "__main__":

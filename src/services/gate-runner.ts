@@ -9,10 +9,19 @@ export type GateOutcome =
       kind: "ran";
       perTest: Record<string, "passed" | "failed">;
       logPath: string;
+      outputPreview: string;
+      outputTruncated: boolean;
     }
-  | { kind: "error"; detail: string; logPath: string };
+  | {
+      kind: "error";
+      detail: string;
+      logPath: string;
+      outputPreview: string;
+      outputTruncated: boolean;
+    };
 
 export const DEFAULT_GATE_TIMEOUT_MS = 30_000;
+const OUTPUT_PREVIEW_LIMIT = 4_000;
 
 const inheritedEnvironment = [
   "PATH",
@@ -84,10 +93,31 @@ export async function runGate(
   const logDirectory = await mkdtemp(resolve(tmpdir(), "uptake-gate-log-"));
   const logPath = resolve(logDirectory, "gate.log");
   const log = createWriteStream(logPath, { encoding: "utf8" });
+  let outputPreview = "";
+  let outputTruncated = false;
+
+  function recordOutput(text: string) {
+    log.write(text);
+    const remaining = OUTPUT_PREVIEW_LIMIT - outputPreview.length;
+    if (remaining > 0) {
+      outputPreview += text.slice(0, remaining);
+    }
+    if (text.length > remaining) {
+      outputTruncated = true;
+    }
+  }
 
   if (argv.length === 0) {
-    log.end("spawn error: argv must contain an executable\n");
-    return { kind: "error", detail: "spawn error: empty argv", logPath };
+    const detail = "spawn error: argv must contain an executable\n";
+    recordOutput(detail);
+    log.end();
+    return {
+      kind: "error",
+      detail: "spawn error: empty argv",
+      logPath,
+      outputPreview,
+      outputTruncated,
+    };
   }
 
   return new Promise((finish) => {
@@ -104,19 +134,19 @@ export async function runGate(
     child.stdout.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8");
       stdout += text;
-      log.write(text);
+      recordOutput(text);
     });
     child.stderr.on("data", (chunk: Buffer) => {
-      log.write(chunk.toString("utf8"));
+      recordOutput(chunk.toString("utf8"));
     });
     child.on("error", (error) => {
       spawnError = error;
-      log.write(`spawn error: ${error.message}\n`);
+      recordOutput(`spawn error: ${error.message}\n`);
     });
 
     const timer = setTimeout(() => {
       timedOut = true;
-      log.write(`timeout after ${timeoutMs}ms\n`);
+      recordOutput(`timeout after ${timeoutMs}ms\n`);
       child.kill("SIGKILL");
     }, timeoutMs);
 
@@ -128,6 +158,8 @@ export async function runGate(
             kind: "error",
             detail: `timeout after ${timeoutMs}ms`,
             logPath,
+            outputPreview,
+            outputTruncated,
           });
           return;
         }
@@ -136,6 +168,8 @@ export async function runGate(
             kind: "error",
             detail: `spawn error: ${spawnError.message}`,
             logPath,
+            outputPreview,
+            outputTruncated,
           });
           return;
         }
@@ -144,16 +178,30 @@ export async function runGate(
             kind: "error",
             detail: `process terminated by signal ${signal}`,
             logPath,
+            outputPreview,
+            outputTruncated,
           });
           return;
         }
 
         try {
-          finish({ kind: "ran", perTest: parseReporter(stdout), logPath });
+          finish({
+            kind: "ran",
+            perTest: parseReporter(stdout),
+            logPath,
+            outputPreview,
+            outputTruncated,
+          });
         } catch (error) {
           const detail =
             error instanceof Error ? error.message : "reporter parse failed";
-          finish({ kind: "error", detail, logPath });
+          finish({
+            kind: "error",
+            detail,
+            logPath,
+            outputPreview,
+            outputTruncated,
+          });
         }
       });
     });

@@ -14,6 +14,16 @@
       "dir": "0-fix2",
       "status": "completed",
       "completed_at": "2026-07-24T16:16:32+0900"
+    },
+    {
+      "dir": "remediate-loop",
+      "status": "completed",
+      "completed_at": "2026-07-24T17:11:10+0900"
+    },
+    {
+      "dir": "1-ui-vertical-slice",
+      "status": "completed",
+      "completed_at": "2026-07-24T18:17:59+0900"
     }
   ]
 }

@@ -1,0 +1,69 @@
+{
+  "reviewId": "review-1",
+  "round": 1,
+  "kind": "full",
+  "target": {
+    "phase": "0-mvp",
+    "branch": "feat-0-mvp",
+    "baseCommit": "c75691c"
+  },
+  "reviewer": "codex",
+  "createdAt": "2026-07-24T15:00:00+0900",
+  "findings": [
+    {
+      "id": null,
+      "severity": "major",
+      "title": "양성 error taxonomy 오분류",
+      "detail": "verify.ts가 양성 실행의 runGate error(리포터 미산출: 설정·문법 오류·spawn 실패·timeout·signal)를 무조건 positive-failed로 분류한다. 음성 경로엔 errorStatus()로 gate-error/timeout을 구분하면서 양성엔 적용하지 않았다. 인프라 오류를 게이트 판정으로 오분류 — AC-7b 위반.",
+      "evidence": { "files": ["src/lib/engine/verify.ts"], "spec": ["AC-7b"] },
+      "suggestedFix": "양성 error에도 errorStatus()를 적용해 gate-error/timeout으로 분류.",
+      "suggestedCategory": "contract_violation",
+      "reviewerConfidence": "high",
+      "closureVerdict": null
+    },
+    {
+      "id": null,
+      "severity": "major",
+      "title": "argv를 실행 전에 공개할 수 없는 구조",
+      "detail": "verify()가 argv를 동결하자마자 runGate를 호출하고 실행이 끝난 뒤에야 frozenArgv를 반환한다. 사용자가 실행 전에 argv를 볼 수 없어 ARCHITECTURE의 'argv 동결→표시→실행' 순서와 AC-12를 API 구조가 강제하지 못한다.",
+      "evidence": { "files": ["src/lib/engine/verify.ts"], "spec": ["AC-12"] },
+      "suggestedFix": "verify()를 prepareVerification()/executeVerification()로 분리.",
+      "suggestedCategory": "implementation_bug",
+      "reviewerConfidence": "high",
+      "closureVerdict": null
+    },
+    {
+      "id": null,
+      "severity": "major",
+      "title": "runGate 전역 mock으로 실제 파이프라인 미검증",
+      "detail": "verify.test.ts가 runGate를 전역 mock해 'mock이 pass/fail을 반환하면 상태머신이 소비한다'는 구현 세부만 검증한다. catalog→instantiate→실제 vitest→apply의 실제 연결이 한 번도 실증되지 않아, runner-상태머신 연결부가 깨져도 통과할 수 있다.",
+      "evidence": { "files": ["src/lib/engine/verify.test.ts"], "spec": ["AC-11"] },
+      "suggestedFix": "runGate mock 없는 통합 테스트 추가(실제 vitest subprocess).",
+      "suggestedCategory": "test_gap",
+      "reviewerConfidence": "high",
+      "closureVerdict": null
+    },
+    {
+      "id": null,
+      "severity": "major",
+      "title": "사용자 주도 UI vertical slice 미구현",
+      "detail": "PRD의 '사용자가 패턴을 선택→탐지→생성물 미리보기→검증→적용'을 잇는 UI vertical slice가 아직 없다. 엔진은 있으나 사용자 주도 경로가 화면으로 노출되지 않는다. 기존 코드의 결함이 아니라 미구현 범위.",
+      "evidence": { "files": ["src/app"], "spec": ["PRD:user-driven-ui"] },
+      "suggestedFix": "UI vertical slice 구현 (별도 구현 phase).",
+      "suggestedCategory": "missing_feature",
+      "reviewerConfidence": "med",
+      "closureVerdict": null
+    },
+    {
+      "id": null,
+      "severity": "minor",
+      "title": "argv preview UI 미구현",
+      "detail": "prepareVerification이 frozenArgv를 공개하지만, 그것을 실행 전에 사용자에게 표시하는 UI가 아직 없다. AC-12의 표시 요구를 엔진은 만족하나 화면이 없다. 미구현 범위.",
+      "evidence": { "files": ["src/app"], "spec": ["AC-12"] },
+      "suggestedFix": "argv preview 화면 구현 (별도 구현 phase).",
+      "suggestedCategory": "missing_feature",
+      "reviewerConfidence": "med",
+      "closureVerdict": null
+    }
+  ]
+}

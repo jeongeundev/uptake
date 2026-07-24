@@ -1,0 +1,17 @@
+{
+  "cycle": 1,
+  "decisions": {
+    "F-001": {
+      "category": "contract_violation",
+      "evidence": "src/lib/engine/detect.ts의 mergeUserProvidedBindings는 detection.status를 검사하지 않고 non-empty 값이면 detected 항목도 user-provided로 교체하며 trim 검증도 없다. src/app/api/workflows/[workflowId]/bindings/route.ts도 임의 string map을 허용한다. 이는 docs/PRD.md AC-4와 docs/UI_GUIDE.md의 binding-unresolved만 사용자 입력을 받는 계약 위반이다."
+    },
+    "F-002": {
+      "category": "contract_violation",
+      "evidence": "playwright.config.ts는 외부 UPTAKE_E2E_FIXTURE_ROOT를 재사용하지만 e2e/global-teardown.config.ts는 소유권 구분 없이 그 root를 recursive rmSync한다. phases/1-ui-vertical-slice/step4.md의 임시 repo만 정리하고 사용자 repo를 수정하지 말라는 금지사항을 위반한다."
+    },
+    "F-003": {
+      "category": "contract_violation",
+      "evidence": "src/lib/engine/verify.ts는 positiveLog/negativeLog가 위치한 workspace를 반환 직전 finally에서 삭제하고, src/components/catalog-bindings-wizard.tsx는 로그 정보를 렌더하지 않는다. docs/ARCHITECTURE.md의 stdout/stderr 전문 보존, 제한 표시, 잘림 사실과 접근 가능한 전체 로그 경로 제공 계약을 위반한다."
+    }
+  }
+}

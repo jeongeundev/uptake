@@ -1,0 +1,48 @@
+{
+  "project": "uptake",
+  "phase": "remediate-loop",
+  "steps": [
+    {
+      "step": 0,
+      "name": "manifest-ingest",
+      "status": "completed",
+      "summary": "scripts/remediate.py — fingerprint()·manifest I/O(단독기록)·ingest(§4 매칭: 신규/진행형/재발/불일치/중복). status 커맨드. test_remediate.py: ingest·중복제거·ID안정·스키마거부. review-1 fixture 5 findings→unresolved",
+      "started_at": "2026-07-24T16:57:24+0900",
+      "completed_at": "2026-07-24T17:00:31+0900"
+    },
+    {
+      "step": 1,
+      "name": "triage",
+      "status": "completed",
+      "summary": "remediate.py apply-triage — triage.json 검증(evidence 필수·category XOR decision·unresolved만)·category→상태 라우팅(bug/contract/test→accepted, missing_feature→deferred, design_issue→requires-human)·history 기록. test: 라우팅·근거없음거부(원자성)·XOR·duplicate",
+      "started_at": "2026-07-24T17:00:32+0900",
+      "completed_at": "2026-07-24T17:03:15+0900"
+    },
+    {
+      "step": 2,
+      "name": "closure",
+      "status": "completed",
+      "summary": "remediate.py closure-packet(accepted만→cycle-N/closure-packet.md, 신규금지 안내)·ingest-closure(closure kind·신규ID거부·resolved는 accepted→resolved by:closure INV-3·still-open 유지). test: packet생성·resolved·still-open·신규거부·재발→requires-human(④)",
+      "started_at": "2026-07-24T17:03:15+0900",
+      "completed_at": "2026-07-24T17:05:54+0900"
+    },
+    {
+      "step": 3,
+      "name": "rule",
+      "status": "completed",
+      "started_at": "2026-07-24T17:05:54+0900",
+      "completed_at": "2026-07-24T17:09:14+0900",
+      "summary": "remediate.py rule — G1~G6 hard gate(deferred 비차단)·score(자문·판정불변 INV-4)·deferredToImplementation·cycle cap 거부·ruling.json(readyForHandoff/handoff seam). test: Ready(①)·open blocker(②)·점수불가침(③)·requires-human(⑥)·fix미완료·캡(⑧)"
+    },
+    {
+      "step": 4,
+      "name": "acceptance-e2e",
+      "status": "completed",
+      "started_at": "2026-07-24T17:09:14+0900",
+      "completed_at": "2026-07-24T17:11:10+0900",
+      "summary": "test_remediate.py e2e — 실제 review-1→triage(bug/contract/test=accepted, missing_feature=deferred)→closure-packet→review-2 ingest-closure(resolved)→rule=Ready(①), deferred 2건 라우팅 비차단(⑨). CLI 스모크(argparse 배선)"
+    }
+  ],
+  "created_at": "2026-07-24T16:57:24+0900",
+  "completed_at": "2026-07-24T17:11:10+0900"
+}
