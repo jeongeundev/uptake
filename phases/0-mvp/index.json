@@ -53,7 +53,9 @@
     {
       "step": 6,
       "name": "gate-runner",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-24T14:36:40+0900",
+      "summary": "src/services/gate-runner.ts — runGate(argv, cwd, timeoutMs): GateOutcome. vitest JSON reporter 파싱으로 ran(perTest 전체)/error(리포터 미산출) 판정, exit code 아님. 고정argv·shell없음·cwd한정·timeout·env허용목록·UTF-8 로그전문보존. gateTestId 미인지(step7이 해석). AC-7b/AC-12 테스트 통과. env목록=CI=1·NODE_ENV=test·PATH/TMPDIR/TEMP/TMP/SystemRoot/ComSpec/PATHEXT만 상속(.env 미상속), timeout기본=30000ms(DEFAULT_GATE_TIMEOUT_MS), cleanup=워크스페이스 미소유·로그는 원문 접근을 위해 보존(step7이 라이프사이클 결정)"
     },
     {
       "step": 7,
