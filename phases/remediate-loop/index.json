@@ -31,7 +31,7 @@
       "name": "rule",
       "status": "completed",
       "started_at": "2026-07-24T17:05:54+0900",
-      "completed_at": "2026-07-24T17:08:48+0900",
+      "completed_at": "2026-07-24T17:09:14+0900",
       "summary": "remediate.py rule — G1~G6 hard gate(deferred 비차단)·score(자문·판정불변 INV-4)·deferredToImplementation·cycle cap 거부·ruling.json(readyForHandoff/handoff seam). test: Ready(①)·open blocker(②)·점수불가침(③)·requires-human(⑥)·fix미완료·캡(⑧)"
     },
     {
