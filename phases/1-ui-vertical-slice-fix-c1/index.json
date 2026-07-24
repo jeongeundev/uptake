@@ -1,0 +1,32 @@
+{
+  "project": "uptake",
+  "phase": "1-ui-vertical-slice-fix-c1",
+  "steps": [
+    {
+      "step": 0,
+      "name": "protect-detected-bindings",
+      "status": "completed",
+      "started_at": "2026-07-24T19:14:41+0900",
+      "summary": "F-001 — 서버가 binding-unresolved의 trim된 non-empty 값만 user-provided로 수용하고 detected binding의 value/evidence를 보존하도록 수정했으며 engine/service 회귀 테스트를 추가했다.",
+      "completed_at": "2026-07-24T19:30:00+0900"
+    },
+    {
+      "step": 1,
+      "name": "protect-external-e2e-fixtures",
+      "status": "completed",
+      "started_at": "2026-07-24T19:20:00+0900",
+      "summary": "F-002 — Playwright 실행이 생성한 fixture root에만 명시적 소유권 표식을 붙여 teardown하고 외부 제공 root는 보존하며 양성·음성 회귀 테스트를 추가했다.",
+      "completed_at": "2026-07-24T19:30:00+0900"
+    },
+    {
+      "step": 2,
+      "name": "preserve-and-show-verify-logs",
+      "status": "completed",
+      "started_at": "2026-07-24T19:21:00+0900",
+      "summary": "F-003 — 독립 임시 전체 로그 경로를 유지하면서 4000자 preview·truncated 상태를 VERIFY 결과로 전달하고 UI에 positive/negative 출력과 전체 로그 경로를 표시했다.",
+      "completed_at": "2026-07-24T19:30:00+0900"
+    }
+  ],
+  "created_at": "2026-07-24T19:14:41+0900",
+  "completed_at": "2026-07-24T19:30:00+0900"
+}
