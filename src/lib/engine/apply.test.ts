@@ -9,16 +9,17 @@ import {
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  applyGenerated,
-  hashTargetBase,
-  type ApprovalRecord,
-} from "@/lib/engine/apply";
+import { applyGenerated, hashTargetBase } from "@/lib/engine/apply";
 import { detectBindings } from "@/lib/engine/detect";
 import { instantiate } from "@/lib/engine/instantiate";
 import { hashGenerated } from "@/lib/engine/verify";
+import {
+  __resetApprovalStoreForTests,
+  approveVerification,
+  createApproval,
+} from "@/services/approval-store";
 import type { GeneratedFile } from "@/lib/engine/instantiate";
 import type { Pattern } from "@/types/pattern";
 
@@ -46,15 +47,17 @@ function generatedFor(root: string): GeneratedFile[] {
   return result.files;
 }
 
-function approval(root: string, files: GeneratedFile[]): ApprovalRecord {
-  return {
+function approval(root: string, files: GeneratedFile[]): string {
+  return createApproval({
     patternId: pattern.patternId,
     targetRepoRoot: root,
     contentHash: hashGenerated(files),
     targetBaseHash: hashTargetBase(root),
     frozenArgv: ["node", "vitest", "run"],
-  };
+  });
 }
+
+beforeEach(__resetApprovalStoreForTests);
 
 afterEach(() => {
   for (const root of temporaryRoots.splice(0)) {
@@ -66,8 +69,10 @@ describe("applyGenerated", () => {
   it("writes the verified files when approval and base hashes match", () => {
     const root = targetCopy();
     const files = generatedFor(root);
+    const verificationId = approval(root, files);
+    expect(approveVerification(verificationId)).toEqual({ ok: true });
 
-    expect(applyGenerated(approval(root, files), files, root)).toEqual({
+    expect(applyGenerated(verificationId, files, root)).toEqual({
       status: "completed",
       written: files.map(({ path }) => path),
     });
@@ -80,6 +85,7 @@ describe("applyGenerated", () => {
     const root = targetCopy();
     const files = generatedFor(root);
     const approved = approval(root, files);
+    expect(approveVerification(approved)).toEqual({ ok: true });
     const changed = files.map((file, index) =>
       index === 0 ? { ...file, content: `${file.content}\nchanged` } : file,
     );
@@ -92,26 +98,53 @@ describe("applyGenerated", () => {
     );
   });
 
-  it("does not write without a valid approval record", () => {
+  it("rejects a pending verification without writing", () => {
     const root = targetCopy();
     const files = generatedFor(root);
+    const verificationId = approval(root, files);
 
-    expect(
-      applyGenerated(
-        undefined as unknown as ApprovalRecord,
-        files,
-        root,
-      ),
-    ).toMatchObject({ status: "diff-mismatch" });
+    expect(applyGenerated(verificationId, files, root)).toMatchObject({
+      status: "not-approved",
+    });
     expect(files.every(({ path }) => !existsSync(resolve(root, path)))).toBe(
       true,
     );
+  });
+
+  it("rejects an unknown verification id without writing", () => {
+    const root = targetCopy();
+    const files = generatedFor(root);
+
+    expect(applyGenerated("forged-id", files, root)).toMatchObject({
+      status: "unknown-approval",
+    });
+    expect(files.every(({ path }) => !existsSync(resolve(root, path)))).toBe(
+      true,
+    );
+  });
+
+  it("rejects reuse after a successful apply without another write", () => {
+    const root = targetCopy();
+    const files = generatedFor(root);
+    const verificationId = approval(root, files);
+    expect(approveVerification(verificationId)).toEqual({ ok: true });
+    expect(applyGenerated(verificationId, files, root)).toMatchObject({
+      status: "completed",
+    });
+
+    expect(applyGenerated(verificationId, files, root)).toMatchObject({
+      status: "not-approved",
+    });
+    for (const file of files) {
+      expect(readFileSync(resolve(root, file.path), "utf8")).toBe(file.content);
+    }
   });
 
   it("rejects a changed target base without writing", () => {
     const root = targetCopy();
     const files = generatedFor(root);
     const approved = approval(root, files);
+    expect(approveVerification(approved)).toEqual({ ok: true });
     writeFileSync(resolve(root, "package.json"), '{"changed":true}\n', "utf8");
 
     expect(applyGenerated(approved, files, root)).toMatchObject({
@@ -128,8 +161,10 @@ describe("applyGenerated", () => {
       { path: "new/first.ts", role: "spec-artifact", content: "first" },
       { path: "package.json/second.ts", role: "spec-check", content: "second" },
     ];
+    const verificationId = approval(root, files);
+    expect(approveVerification(verificationId)).toEqual({ ok: true });
 
-    expect(applyGenerated(approval(root, files), files, root)).toMatchObject({
+    expect(applyGenerated(verificationId, files, root)).toMatchObject({
       status: "apply-failed",
     });
     expect(existsSync(resolve(root, files[0].path))).toBe(false);

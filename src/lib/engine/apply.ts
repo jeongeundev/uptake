@@ -14,19 +14,17 @@ import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 import type { GeneratedFile } from "@/lib/engine/instantiate";
 import { hashGenerated } from "@/lib/engine/verify";
-
-export type ApprovalRecord = {
-  patternId: string;
-  targetRepoRoot: string;
-  contentHash: string;
-  targetBaseHash: string;
-  frozenArgv: string[];
-};
+import { consumeApproved } from "@/services/approval-store";
 
 export type ApplyResult =
   | { status: "completed"; written: string[] }
   | {
-      status: "diff-mismatch" | "apply-failed" | "base-changed";
+      status:
+        | "diff-mismatch"
+        | "apply-failed"
+        | "base-changed"
+        | "not-approved"
+        | "unknown-approval";
       detail: string;
     };
 
@@ -70,16 +68,25 @@ export function hashTargetBase(targetRepoRoot: string): string {
 }
 
 export function applyGenerated(
-  approval: ApprovalRecord,
+  verificationId: string,
   files: GeneratedFile[],
   targetRepoRoot: string,
 ): ApplyResult {
+  const consumed = consumeApproved(verificationId);
+  if (!consumed.ok) {
+    return {
+      status:
+        consumed.reason === "unknown-approval"
+          ? "unknown-approval"
+          : "not-approved",
+      detail: consumed.reason,
+    };
+  }
+
+  const { approval } = consumed;
   const root = resolve(targetRepoRoot);
   if (
-    approval === undefined ||
     approval.targetRepoRoot !== targetRepoRoot ||
-    approval.patternId.length === 0 ||
-    approval.frozenArgv.length === 0 ||
     hashGenerated(files) !== approval.contentHash
   ) {
     return {
