@@ -47,7 +47,8 @@
       "name": "instantiate",
       "status": "completed",
       "started_at": "2026-07-24T14:33:29+0900",
-      "summary": "src/lib/engine/instantiate.ts — instantiate(pattern, bindings): 고정 템플릿 생성(declared-changes.ts + spec-gate.test.ts, uptake-gate/). marker는 패턴 oracle에서 읽어 spec-artifact에 1회 심기, InstantiatedInjection 동시 산출, gateTestId='declared-change-present'. 소프트게이트(AC-3), injection-failed 검사. LLM 미사용·GeneratedFile[] 확정"
+      "summary": "src/lib/engine/instantiate.ts — instantiate(pattern, bindings): 고정 템플릿 생성(declared-changes.ts + spec-gate.test.ts, uptake-gate/). marker는 패턴 oracle에서 읽어 spec-artifact에 1회 심기, InstantiatedInjection 동시 산출, gateTestId='declared-change-present'. 소프트게이트(AC-3), injection-failed 검사. LLM 미사용·GeneratedFile[] 확정",
+      "completed_at": "2026-07-24T14:36:40+0900"
     },
     {
       "step": 6,
