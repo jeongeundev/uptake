@@ -182,6 +182,42 @@ describe("workflow service boundary", () => {
     expect(existsSync(resolve(targetRoot, "uptake-gate"))).toBe(false);
   });
 
+  it("does not let user input replace detected bindings", () => {
+    const { targetRoot } = setupFixture();
+    const sessionId = createSession();
+    const created = createWorkflow(
+      sessionId,
+      "spec-change-declaration-gate",
+      targetRoot,
+    );
+    if (created.status !== "bindings-ready") {
+      throw new Error(created.detail);
+    }
+    const detectedChecker = created.bindings.find(
+      ({ bindingId }) => bindingId === "checker",
+    );
+
+    const merged = mergeWorkflowBindings(sessionId, created.workflowId, {
+      checker: "jest",
+      "spec-format": "  markdown  ",
+      naming: "   ",
+    });
+
+    expect(merged.status).toBe("bindings-ready");
+    if (merged.status !== "bindings-ready") {
+      throw new Error(merged.detail);
+    }
+    expect(
+      merged.bindings.find(({ bindingId }) => bindingId === "checker"),
+    ).toEqual(detectedChecker);
+    expect(
+      merged.bindings.find(({ bindingId }) => bindingId === "spec-format"),
+    ).toMatchObject({ status: "user-provided", value: "markdown" });
+    expect(
+      merged.bindings.find(({ bindingId }) => bindingId === "naming"),
+    ).toMatchObject({ status: "binding-unresolved" });
+  });
+
   it("treats another session as an unknown workflow at every mutation", async () => {
     const { targetRoot } = setupFixture();
     const owner = createSession();

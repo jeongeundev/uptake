@@ -61,6 +61,8 @@ describe("runGate", () => {
     const log = readFileSync(outcome.logPath, "utf8");
     expect(log).toContain('"fullName":"gate passes"');
     expect(log).toContain('"fullName":"gate fails"');
+    expect(outcome.outputPreview).toContain('"fullName":"gate passes"');
+    expect(outcome.outputTruncated).toBe(false);
   });
 
   it("reports a syntax error as error, never as a failed test", async () => {
@@ -131,5 +133,30 @@ describe("runGate", () => {
     });
     expect(readFileSync(outcome.logPath, "utf8")).toContain("complete stderr");
     expect(() => readFileSync(markerPath)).toThrow();
+  });
+
+  it("limits the output preview while preserving the complete log", async () => {
+    const workspace = makeWorkspace();
+    const reporterScript = resolve(workspace, "large-reporter.mjs");
+    writeFileSync(
+      reporterScript,
+      [
+        'process.stderr.write("x".repeat(5000));',
+        'console.log(JSON.stringify({ testResults: [{ assertionResults: [{ fullName: "large output", status: "passed" }] }] }));',
+      ].join("\n"),
+    );
+
+    const outcome = await runGate(
+      [process.execPath, reporterScript],
+      workspace,
+      10_000,
+    );
+
+    expect(outcome).toMatchObject({
+      kind: "ran",
+      outputTruncated: true,
+    });
+    expect(outcome.outputPreview).toHaveLength(4000);
+    expect(readFileSync(outcome.logPath, "utf8").length).toBeGreaterThan(5000);
   });
 });

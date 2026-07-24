@@ -37,6 +37,10 @@ type VerifyResult =
       frozenArgv: string[];
       positiveLog: string;
       negativeLog: string;
+      positivePreview: string;
+      positiveTruncated: boolean;
+      negativePreview: string;
+      negativeTruncated: boolean;
     }
   | {
       status:
@@ -323,6 +327,21 @@ export function VerifyResultView({
           양성 green과 음성 red가 확인되었습니다. 승인 대기 중입니다.
         </p>
       </div>
+      {([
+        ["Positive run", result.positivePreview, result.positiveTruncated, result.positiveLog],
+        ["Negative run", result.negativePreview, result.negativeTruncated, result.negativeLog],
+      ] as const).map(([label, preview, truncated, logPath]) => (
+        <section className="border border-neutral-800 bg-[#141414] p-4" key={label}>
+          <h3 className="text-sm font-medium text-neutral-200">{label}</h3>
+          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-xs text-neutral-300">
+            {preview}
+          </pre>
+          <p className="mt-2 text-xs text-neutral-400">
+            {truncated ? "Output truncated · " : "Complete preview · "}
+            <span className="font-mono">{logPath}</span>
+          </p>
+        </section>
+      ))}
       <div>
         <p className="text-xs text-neutral-500">Step 4 · Review</p>
         <h2 id="diff-heading" className="text-lg font-semibold">Verified diff</h2>

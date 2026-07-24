@@ -12,8 +12,9 @@ function requiredEnvironment(name: string): string {
   return value;
 }
 
+const ownsFixture = process.env.UPTAKE_E2E_FIXTURE_ROOT === undefined;
 const fixture =
-  process.env.UPTAKE_E2E_FIXTURE_ROOT === undefined
+  ownsFixture
     ? createE2EFixtures()
     : {
         root: requiredEnvironment("UPTAKE_E2E_FIXTURE_ROOT"),
@@ -23,6 +24,7 @@ const fixture =
       };
 
 process.env.UPTAKE_E2E_FIXTURE_ROOT = fixture.root;
+process.env.UPTAKE_E2E_FIXTURE_OWNED = ownsFixture ? "1" : "0";
 process.env.UPTAKE_CATALOG_DIR = fixture.catalogDir;
 process.env.UPTAKE_SOURCE_ROOT = fixture.sourceRoot;
 process.env.UPTAKE_E2E_TARGET_ROOT = fixture.targetRoot;

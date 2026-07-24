@@ -114,4 +114,32 @@ describe("detectBindings", () => {
       value: "markdown",
     });
   });
+
+  it("only accepts trimmed values for unresolved bindings", () => {
+    const detections = detectBindings(
+      pattern,
+      resolve("tests/fixtures/target-vitest"),
+    );
+
+    const merged = mergeUserProvidedBindings(detections, {
+      checker: "jest",
+      "spec-format": "  markdown  ",
+      naming: "   ",
+      unknown: "value",
+    });
+
+    expect(merged.find(({ bindingId }) => bindingId === "checker")).toEqual(
+      detections.find(({ bindingId }) => bindingId === "checker"),
+    );
+    expect(merged.find(({ bindingId }) => bindingId === "spec-format")).toEqual({
+      bindingId: "spec-format",
+      kind: "spec-format",
+      status: "user-provided",
+      value: "markdown",
+    });
+    expect(merged.find(({ bindingId }) => bindingId === "naming")?.status).toBe(
+      "binding-unresolved",
+    );
+    expect(merged).toHaveLength(detections.length);
+  });
 });

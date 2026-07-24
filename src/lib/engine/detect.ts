@@ -192,8 +192,8 @@ export function mergeUserProvidedBindings(
   values: Readonly<Record<string, string>>,
 ): BindingDetection[] {
   return detections.map((detection) => {
-    const value = values[detection.bindingId];
-    return typeof value === "string" && value.length > 0
+    const value = values[detection.bindingId]?.trim();
+    return detection.status === "binding-unresolved" && value
       ? {
           bindingId: detection.bindingId,
           kind: detection.kind,

@@ -44,6 +44,8 @@ function ran(status: "passed" | "failed", logPath: string): GateOutcome {
     kind: "ran",
     perTest: { [instantiated.gateTestId]: status },
     logPath,
+    outputPreview: `${status} output`,
+    outputTruncated: false,
   };
 }
 
@@ -120,6 +122,10 @@ describe("executeVerification", () => {
       frozenArgv: expect.any(Array),
       positiveLog: "/logs/positive.log",
       negativeLog: "/logs/negative.log",
+      positivePreview: "passed output",
+      positiveTruncated: false,
+      negativePreview: "failed output",
+      negativeTruncated: false,
     });
     expect(targetSnapshot()).toEqual(before);
     expect(workspaces).toHaveLength(2);

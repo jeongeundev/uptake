@@ -267,12 +267,22 @@ describe("verify and apply UI", () => {
           frozenArgv: prepared.frozenArgv,
           positiveLog: "/tmp/positive.json",
           negativeLog: "/tmp/negative.json",
+          positivePreview: "positive output",
+          positiveTruncated: false,
+          negativePreview: "negative output",
+          negativeTruncated: true,
         }}
       />,
     );
 
     expect(markup).toContain("text-green-400");
     expect(markup).toContain("양성 green과 음성 red가 확인되었습니다.");
+    expect(markup).toContain("positive output");
+    expect(markup).toContain("negative output");
+    expect(markup).toContain("Complete preview");
+    expect(markup).toContain("Output truncated");
+    expect(markup).toContain("/tmp/positive.json");
+    expect(markup).toContain("/tmp/negative.json");
     expect(markup).toContain("add");
     expect(markup).toContain(prepared.files[0].path);
     expect(markup).toContain(prepared.files[0].role);
