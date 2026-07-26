@@ -7,6 +7,7 @@
     "build": "next build",
     "eval:proposer": "tsx evals/proposer.eval.mts",
     "lint": "eslint",
+    "proto:survey": "tsx src/lib/engine/survey.prototype.mts",
     "test": "vitest run --passWithNoTests",
     "test:e2e": "playwright test && playwright test --config playwright.unresolved.config.ts"
   },
