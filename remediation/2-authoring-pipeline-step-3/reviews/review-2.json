@@ -1,0 +1,37 @@
+{
+  "reviewId": "review-2",
+  "round": 2,
+  "kind": "closure",
+  "target": {
+    "phase": "2-authoring-pipeline",
+    "branch": "feat-2-authoring-pipeline",
+    "baseCommit": "3b9f4d48a01ea39e1addc8066086335e352743c8"
+  },
+  "reviewer": "codex",
+  "createdAt": "2026-07-26T16:23:44+0900",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "title": "ABSTRACT가 validateEvidence를 통과하지 못하는 초안을 성공으로 반환한다",
+      "detail": "해결됨. contrastEvidence는 조립된 provenance가 참조하는 source만 대상으로 distinct independenceGroup과 isTargetStack을 검사한다. observed 요청의 그룹 수가 정확히 1이 아니거나 corroborated 요청에 비타깃 스택 source가 없으면 공개 reason union을 변경하지 않고 reference-invalid와 구체적 detail을 반환한다. evidenceStatus나 사용자 제공 판정값을 보정하지 않는다. 추가된 회귀 테스트는 observed+2그룹 및 corroborated+전부 타깃 스택을 거부하며, 기존 정상 corroborated와 observed N=1 테스트를 포함한 abstract.test.ts 11개 테스트가 모두 통과했다.",
+      "evidence": {
+        "files": [
+          "src/lib/engine/abstract.ts",
+          "src/lib/catalog/load.ts",
+          "src/lib/engine/abstract.test.ts"
+        ],
+        "spec": [
+          "phases/2-authoring-pipeline/step3.md",
+          "PRD AC-1",
+          "PRD AC-2",
+          "ARCHITECTURE.md 두 층의 게이트"
+        ]
+      },
+      "suggestedFix": null,
+      "suggestedCategory": "contract_violation",
+      "reviewerConfidence": "high",
+      "closureVerdict": "resolved"
+    }
+  ]
+}
