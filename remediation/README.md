@@ -9,19 +9,26 @@
 - fix phase는 `phases/{loop-id}-fix-c<N>/`에 만든다.
 - **step 단위 loop-id를 만들지 않는다.** 리뷰는 phase 구현이 전부 끝난 뒤 한 번 돈다.
 
-## 루프 목록
+## 루프 목록 (유효)
 
 | loop-id | 대상 phase | 개시 | 판정 | 비고 |
 |---|---|---|---|---|
-| `1-ui-vertical-slice` | `1-ui-vertical-slice` | 07-24 19:05 | Ready | major 3건 resolved |
-| `2-authoring-pipeline` | `2-authoring-pipeline` | 07-26 15:56 | Ready | **무효** — step 3도 끝나기 전에 개시돼 findings 0건으로 Ready. `-final`이 정본 |
-| `2-authoring-pipeline-step-1` | 동 phase step 1 | 07-26 16:01 | Ready | **규칙 위반**(step 단위 루프). findings 0건 |
-| `2-authoring-pipeline-step-2` | 동 phase step 2 | 07-26 16:08 | Ready | **규칙 위반**. findings 0건 |
-| `2-authoring-pipeline-step-3` | 동 phase step 3 | 07-26 16:19 | Ready | **규칙 위반**. major 1건 resolved |
-| `2-authoring-pipeline-step-7` | 동 phase step 7 | 07-26 16:59 | Ready | **규칙 위반**. major 1건 resolved |
-| `2-authoring-pipeline-step-8` | 동 phase step 8 | 07-26 17:22 | 없음 | **미결 방치 → `-final`로 흡수**(아래) |
+| `1-ui-vertical-slice` | `1-ui-vertical-slice` | 07-24 19:05 | **Ready** | major 3건 resolved |
 | `2-authoring-pipeline-final` | `2-authoring-pipeline` | 07-26 17:55 | **Escalate** (cycle 2) | 구현 완료 후의 정본 루프. F-001을 `2-fix` phase로 넘김 |
 | `2-fix` | `2-fix` | 07-26 20:05 | **Ready** | P1~P3을 처음으로 충족한 루프. findings 0건, score 100 |
+
+phase 2의 최종 상태는 `-final`의 Escalate가 아니라 **`2-fix`의 Ready**다 — F-001이 `2-fix`에서
+해소됐고, 루프 간 상태를 소급 수정하지 않는 원칙에 따라 `-final`의 manifest는 그 시점 사실을
+그대로 보존한다(아래 'F-001의 최종 처분').
+
+## 보관된 루프 (판정 효력 없음)
+
+계약 위반으로 생성됐거나 무효인 루프 6개는 [`archive/`](./archive/)로 옮겼다. 목록·무효 사유는
+[`archive/README.md`](./archive/README.md). **그 안의 `ruling.json`을 현재 판정으로 읽지 마라** —
+특히 `archive/2-authoring-pipeline`은 구현 완료 전에 열려 "Ready score 100"을 기록했다.
+
+옮겼을 뿐 지우지 않았다. 커밋 히스토리가 그 경로를 가리키고, 실패한 루프 기록 자체가 증거다.
+비워진 6개 loop-id는 **재사용하지 마라**.
 
 `2-fix` phase에도 같은 사고가 한 번 더 일어났다. step 1 실행 중 구현 세션이 스스로
 `remediation/2-fix/` 루프와 `phases/2-fix-fix-c1/`을 만들어 돌렸다(커밋 `0182860`~`59a9243`).
