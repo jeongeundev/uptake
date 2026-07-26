@@ -20,9 +20,11 @@ export type CatalogLoadResult = {
   rejected: RejectedPattern[];
 };
 
-type ValidationResult =
+export type PatternValidation =
   | { ok: true; pattern: Pattern }
-  | { ok: false; reason: string; detail?: string };
+  | { ok: false; reason: string };
+
+type ValidationResult = PatternValidation;
 
 const idPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const revisionPattern = /^[0-9a-f]{40}$/i;
@@ -300,6 +302,29 @@ function validateProvenance(
   return { ok: true, pattern };
 }
 
+export function validatePatternValue(
+  value: unknown,
+  filename: string,
+  sourceRoot = process.env.UPTAKE_SOURCE_ROOT ?? "./.uptake/sources",
+): PatternValidation {
+  const parsed = parsePattern(value, filename);
+  if (!parsed.ok) {
+    return parsed;
+  }
+
+  const validations = [
+    validateReferences(parsed.pattern),
+    validateEvidence(parsed.pattern),
+    validateProvenance(parsed.pattern, sourceRoot),
+  ];
+  return (
+    validations.find((validation) => !validation.ok) ?? {
+      ok: true,
+      pattern: parsed.pattern,
+    }
+  );
+}
+
 export function loadCatalog(
   catalogDir: string,
   sourceRoot = process.env.UPTAKE_SOURCE_ROOT ?? "./.uptake/sources",
@@ -326,26 +351,16 @@ export function loadCatalog(
       continue;
     }
 
-    const parsedPattern = parsePattern(parsed, file);
-    if (!parsedPattern.ok) {
-      result.rejected.push({ file, reason: parsedPattern.reason });
-      continue;
-    }
-    const validations = [
-      validateReferences(parsedPattern.pattern),
-      validateEvidence(parsedPattern.pattern),
-      validateProvenance(parsedPattern.pattern, sourceRoot),
-    ];
-    const rejection = validations.find((validation) => !validation.ok);
-    if (rejection && !rejection.ok) {
-      result.rejected.push({ file, reason: rejection.reason });
+    const validation = validatePatternValue(parsed, file, sourceRoot);
+    if (!validation.ok) {
+      result.rejected.push({ file, reason: validation.reason });
       continue;
     }
     result.loaded.push({
-      pattern: parsedPattern.pattern,
+      pattern: validation.pattern,
       generationEnabled:
-        parsedPattern.pattern.capability === "generative" &&
-        parsedPattern.pattern.evidenceStatus === "corroborated",
+        validation.pattern.capability === "generative" &&
+        validation.pattern.evidenceStatus === "corroborated",
     });
   }
   return result;
