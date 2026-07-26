@@ -12,12 +12,13 @@ src/
 │   └── api/            # 서버측 라우트: repo 읽기, 엔진 호출, 검증 실행
 ├── components/         # UI 컴포넌트
 ├── lib/
-│   ├── engine/         # INSTANTIATE / VERIFY · EXTRACT / ABSTRACT (phase 2 — 아래 저작 계약 참조)
+│   ├── engine/         # INSTANTIATE / VERIFY · EXTRACT / ABSTRACT (phase 2) · SURVEY (phase 3) — 아래 계약 참조
 │   ├── catalog/        # 패턴 파일 로드·직렬화 (포터블 포맷)
 │   └── provenance/     # 소스 경로 resolve·검증 (환각 차단)
 ├── services/           # Anthropic SDK 래퍼, 로컬 툴체인 실행 래퍼(vitest)
 └── types/              # 패턴 스키마 등 타입 정의
 catalog/                # 손 큐레이션 씨앗 패턴 파일들 (repo에 동봉 = 커먼즈의 실재 형태)
+survey-rules.json       # SURVEY 수집 규칙 (repo에 동봉된 데이터 — 코드가 아니다 · ADR-018)
 ```
 
 ## 패턴
@@ -51,7 +52,75 @@ catalog/                # 손 큐레이션 씨앗 패턴 파일들 (repo에 동�
 
 **EXTRACT·ABSTRACT는 MVP 앱의 런타임 기능이 아니었다 — phase 2에서 앱 기능이 된다.** MVP에선 위 흐름의 첫 블록이 오프라인 손 큐레이션 절차였고, 산출물인 패턴 JSON이 `catalog/`에 동봉된 채로 제품에 들어왔다. 앱이 구현한 것은 **INSTANTIATE와 VERIFY**뿐이었다. **phase 2는 대상 지정 추출로 그 첫 블록을 앱 안에 들인다** — 사용자가 소스 저장소 ≥2개와 추출할 방법론을 지정하면 앱이 근거를 수집·대조해 초안을 만들고, 승인 후에만 `catalog/`에 기록한다(아래 'EXTRACT·ABSTRACT 저작 계약'). ABSTRACT가 프로젝트의 핵심 가치라는 것(ADR-004)을 이제 앱이 실제로 수행한다.
 
-**개방형 발견은 더 이상 E2 비전이 아니다 — phase 3에서 SURVEY로 본선 승격됐다(ADR-017).** phase 2까지는 사용자가 "무엇을 추출할지"를 지정해야 했고 ADR-014가 개방형을 E2로 미뤄뒀으나, 그 전제가 타깃 사용자와 모순된다는 판단으로 폐기됐다 — intent를 지정할 수 있는 사용자는 이미 도구가 필요 없다. phase 3는 저장소 하나만 받아 후보를 제안하는 **SURVEY**를 흐름의 맨 앞에 놓고, 기존 EXTRACT·ABSTRACT는 그 결과를 소비한다. 세부 계약은 phase 3 착수 시 이 문서에 추가한다.
+**개방형 발견은 더 이상 E2 비전이 아니다 — phase 3에서 SURVEY로 본선 승격됐다(ADR-017).** phase 2까지는 사용자가 "무엇을 추출할지"를 지정해야 했고 ADR-014가 개방형을 E2로 미뤄뒀으나, 그 전제가 타깃 사용자와 모순된다는 판단으로 폐기됐다 — intent를 지정할 수 있는 사용자는 이미 도구가 필요 없다. phase 3는 저장소 하나만 받아 후보를 제안하는 **SURVEY**를 흐름의 맨 앞에 놓고, 기존 EXTRACT·ABSTRACT는 그 결과를 소비한다(아래 'SURVEY 계약').
+
+## SURVEY 계약 (phase 3)
+저장소 하나를 받아 그 저장소의 개발 체계 후보를 제시하는 계약이다. 제품의 루트이며(ADR-017), 아래 저작 계약의 **앞단**이다. SURVEY는 새 등재 경로를 만들지 않는다 — `AuthoringRequest`를 자동 조립해 기존 EXTRACT·ABSTRACT·승인·등재를 **그대로 통과**시킨다. intent를 없애는 것이 아니라 자동 생성하는 것이다.
+
+**범위.** 저장소 1개 → 후보 N개 → 사용자가 고른 하나 → `observed`/`descriptive` 등재. 다중 저장소 동시 분석·유사 프로젝트 추천·`corroborated` 자동 승급·`generative` 자동 합성은 범위 밖이다(PRD 'Phase 3 범위').
+
+**입력과 revision 고정.** 사용자는 `UPTAKE_SOURCE_ROOT` 아래 저장소 식별자만 지정한다. intent는 입력이 아니다. SURVEY 개시 시 그 저장소의 HEAD 커밋 SHA를 고정하고, 이후 모든 수집과 근거 읽기는 **그 revision에서만** 일어난다 — 경로 목록은 `git ls-tree -r --name-only <revision>`, 내용은 `git show <revision>:<path>`다. **작업 트리를 읽지 않는다.** 분석 대상 저장소는 읽기 전용이며 checkout·네트워크·코드 실행이 없다(기존 provenance resolve 계약과 동일).
+
+**수집 — "어디를 볼까"는 결정적 데이터가 정한다(ADR-018).** 수집 규칙은 코드가 아니라 repo 동봉 데이터 파일이다. 각 규칙은 `{ id, include }`(정규식 문자열 목록)이고, 전역 `exclude`와 예산(파일별 상한·총 상한)을 함께 싣는다.
+
+```
+경로 목록 (고정 revision)
+  → exclude 제외 → 첫 매칭 규칙에 배정 → (ruleId, path) 사전식 정렬
+  → 카테고리 라운드로빈      ← 한 규칙이 예산을 독식하지 못하게 한다
+  → 파일별 상한 초과분 절단 · 총예산 초과 파일은 skip (중단 아님)
+  → 수집 목록 확정
+```
+
+- 규칙 파일이 없거나 정규식이 컴파일되지 않으면 **명시적 오류로 표면화**한다. 조용히 빈 규칙으로 진행하지 않는다 — "규칙이 죽었다"와 "신호가 없다"는 구별되어야 한다.
+- 총예산 초과는 `break`가 아니라 `skip`이다. 큰 파일 하나가 뒤 카테고리를 통째로 굶기면 안 된다(실측 결함).
+- 같은 revision·같은 규칙이면 수집 결과는 **순서까지 항상 같다**.
+
+**후보 제안 — LLM은 후보만(ADR-015).** SURVEY도 proposer 포트를 거치고, 수용 기준 테스트는 그 포트를 스텁으로 주입해 결정적 기계만 검증한다. 수집한 파일 내용은 `untrustedBlock` 경계 안에 **데이터로** 넣는다(신뢰 경계). 후보의 형태:
+
+```ts
+type SurveyCandidate = {
+  id: string;          // kebab-case — 채택 시 patternId가 된다
+  name: string;
+  intent: string;      // 한 문장 — 이 방법론이 달성하는 것
+  discipline: string;  // 무엇을 강제·금지하며 어떤 기계로 그렇게 하는가
+  evidence: string[];  // 수집 목록에 실재하는 repo-상대 경로
+  confidence: "high" | "medium" | "low";
+};
+```
+
+- `discipline`은 **구체적이어야 한다**. "TDD를 쓴다"는 쓸모없고 "같은 변경에 테스트 파일이 없으면 pre-edit 훅이 소스 편집을 거부한다"가 쓸모 있다. 이 요구가 해상도를 만들었다는 것이 스파이크의 실측 결과이며, 링크 모음집과 갈리는 지점이다.
+- `capability`는 후보에 **없다**. phase 3 등재물은 항상 `descriptive`이므로 쓰이지 않는 필드다.
+- `confidence`는 선택 화면의 판단 보조로만 쓰고 **등재물에 담지 않는다**. 분류축은 둘뿐이다(ADR-019).
+
+**환각 폐기 — 2단.**
+
+1. **SURVEY 단계**: `evidence` 중 **수집 목록에 없는 경로**를 폐기한다. 기준은 repo 전체가 아니라 **LLM에 실제로 제시한 목록**이다 — 보여주지 않은 파일을 근거로 대는 것은 환각이다. 남은 evidence가 0이면 후보 자체를 폐기한다.
+2. **등재 단계**: 기존 provenance resolve 하드 게이트가 다시 건다.
+
+두 단계의 폐기는 **사유와 함께 사용자에게 보인다**. 조용히 사라지는 후보는 없다(ADR-009).
+
+**채택 — `AuthoringRequest` 자동 조립.** 사용자가 후보 하나를 고르면 아래를 결정적으로 조립해 기존 저작 파이프라인에 넣는다. LLM은 이 조립에 관여하지 않는다.
+
+| 필드 | 값 | 근거 |
+|---|---|---|
+| `patternId`·`name`·`intent` | 후보에서 그대로 | |
+| `capability` | `"descriptive"` **고정** | oracle 초안·자기검증은 앵커 형태 한정(ADR-016) |
+| `evidenceStatus` | `"observed"` **고정** | 저장소 1개 = 독립 그룹 1개(ADR-005) |
+| `sources[0].repository` | 사용자가 지정한 저장소 식별자 | |
+| `sources[0].independenceGroup` | 저장소 식별자 그대로 | 그룹이 1개인 것은 판정이 아니라 자명한 사실이다 |
+| `sources[0].independenceNote` | 단일 저장소 관찰임을 밝히는 고정 문구 | |
+| `sources[0].isTargetStack` | `detect.ts`의 결정적 관찰 결과 | 추론이 아니라 관찰 |
+| `sources[0].stack` | 관찰된 표시 라벨, 없으면 `"unspecified"` | 표시용이며 비교에 쓰지 않는다 |
+
+**근거는 재추출하지 않는다.** 살아남은 후보 `evidence` 경로를 **그대로** EXTRACT에 주입한다 — 파일 후보 제안을 다시 호출하지 않는다. 사용자가 화면에서 보고 고른 근거와 등재된 `provenance`가 달라지는 경로는 없다(이식의 AC-9와 같은 성격의 요구다).
+
+**role은 하나다.** 주입되는 evidence 전부가 후보 하나에 대응하는 **단일 role**로 묶인다. 저장소가 하나뿐이면 무엇이 스택-불변 본질이고 무엇이 결합점인지 **가를 근거가 없다**(ADR-005: 공통=본질 / 차이=결합점). role을 쪼개는 것은 대조가 하는 일이며, 이 패턴이 두 번째 저장소와 대조돼 `corroborated`로 승급할 때 비로소 갈라진다. 따라서 SURVEY 등재물의 `bindingPoints`는 비어 있고, **비어 있는 것이 정직하다.**
+
+**revision 이동은 거부한다.** SURVEY가 고정한 revision과 채택 시점에 EXTRACT가 고정하는 revision이 다르면 등재를 거부하고 재조사를 요구한다. 사용자가 본 근거와 등재되는 근거가 서로 다른 커밋의 것이 되는 경로는 없다.
+
+**승인·등재는 기존 계약 그대로.** 초안은 승인 전까지 카탈로그에 쓰지 않고, 입력 fingerprint에 결속된 draft로 남으며, 승인 이벤트가 한 번 소비돼 `catalog/<patternId>.json`에 원자적으로 기록된다. 기존 파일을 덮어쓰지 않고 patternId 충돌은 등재 거부다(씨앗 보호). 기록 전·후로 층 1 하드 게이트를 통과한다.
+
+**결과 화면은 한계를 밝힌다.** 자생/상속을 구분하지 않는다는 것(ADR-019), `observed`는 "이 저장소가 실제로 이렇게 한다"까지만 주장한다는 것(ADR-006)을 숨기지 않는다. 서술적 태도의 물질적 형태다.
 
 ## EXTRACT·ABSTRACT 저작 계약 (phase 2)
 카탈로그를 손이 아니라 앱이 저작하는 계약이다. **결정성 경계**(ADR-015)를 지탱한다 — LLM은 후보만 내고, 무엇이 카탈로그에 남을지는 결정적 게이트와 사용자가 정한다.
@@ -329,3 +398,6 @@ type Pattern = {
 | `descriptive` 패턴 최소 수량(ADR-003의 "넓게") · 씨앗 "성공 repo" 선정 근거 기록 | M0 카탈로깅 스파이크 |
 | **ABSTRACT 대조 규칙** — role/binding 후보 경계, 역할 정합·병합, 근거 중복 제거 | ABSTRACT 구현 (phase 2) |
 | **카탈로그 쓰기** — `patternId` 생성·충돌, 원자적 쓰기, 기존 파일 덮어쓰기 정책, 승인 저장소 결속 | 카탈로그 쓰기 구현 (phase 2) |
+| **SURVEY 수집 규칙의 초기 목록** — 어느 생태계를 몇 개 카테고리로 덮는가, 예산 기본값 | SURVEY 수집기 구현 (phase 3) |
+| **SURVEY 프롬프트 문안** — `discipline` 지시 문구, 후보 수 상한, 구조화 출력 실패 시 재시도 | SURVEY proposer 구현 (phase 3) |
+| **SURVEY 표면** — 후보 목록·폐기 사유의 표시 형태, 한계 고지 문안, 채택→승인 API 경계 | SURVEY UI/API 구현 (phase 3) |
