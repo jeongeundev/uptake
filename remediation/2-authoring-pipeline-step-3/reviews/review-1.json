@@ -1,0 +1,37 @@
+{
+  "reviewId": "review-1",
+  "round": 1,
+  "kind": "full",
+  "target": {
+    "phase": "2-authoring-pipeline",
+    "branch": "feat-2-authoring-pipeline",
+    "baseCommit": "3b9f4d48a01ea39e1addc8066086335e352743c8"
+  },
+  "reviewer": "codex",
+  "createdAt": "2026-07-26T16:17:40+0900",
+  "findings": [
+    {
+      "id": null,
+      "severity": "major",
+      "title": "ABSTRACT가 validateEvidence를 통과하지 못하는 초안을 성공으로 반환한다",
+      "detail": "contrastEvidence는 역할별 독립 그룹 수와 양방향 참조만 검사하고, load.ts의 evidenceStatus 선언 일치 및 비타깃 스택 조건을 검사하지 않는다. 따라서 observed 요청에 서로 다른 independenceGroup 두 개가 있거나, corroborated 요청의 모든 source가 isTargetStack=true여도 각 역할에 두 그룹의 근거만 있으면 ok:true 초안이 반환된다. 이 초안은 이후 카탈로그 하드 게이트의 validateEvidence에서 거부되므로, 이 step의 '초안은 validateReferences·validateEvidence 검사를 통과해야 한다'는 계약과 등재 단계보다 앞서 오류를 표면화한다는 목적을 위반한다. abstract.test.ts에도 이 두 성공-후-로드거부 경로를 막는 테스트가 없다.",
+      "evidence": {
+        "files": [
+          "src/lib/engine/abstract.ts",
+          "src/lib/catalog/load.ts",
+          "src/lib/engine/abstract.test.ts"
+        ],
+        "spec": [
+          "phases/2-authoring-pipeline/step3.md",
+          "PRD AC-1",
+          "PRD AC-2",
+          "ARCHITECTURE.md 두 층의 게이트"
+        ]
+      },
+      "suggestedFix": "성공 초안을 반환하기 전에 채택된 provenance가 연결된 source를 기준으로 validateEvidence와 동일한 결정적 조건을 검사하고, observed의 distinct group 수 불일치 및 corroborated의 비타깃 스택 부재를 명시적 실패로 반환하라. 두 회귀 fixture를 abstract.test.ts에 추가하라.",
+      "suggestedCategory": null,
+      "reviewerConfidence": "high",
+      "closureVerdict": null
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "cycle": 1,
+  "decisions": {
+    "F-001": {
+      "category": "contract_violation",
+      "evidence": "phases/2-authoring-pipeline/step3.md는 load.ts의 validateEvidence 기준을 통과하는 초안을 요구하지만 src/lib/engine/abstract.ts는 역할별 그룹 수만 검사해 observed 다중 그룹과 corroborated 비타깃 스택 부재를 ok:true로 반환한다."
+    }
+  }
+}
