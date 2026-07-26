@@ -61,7 +61,9 @@ function readPackageJson(targetRepoRoot: string): Record<string, unknown> | null
   }
 }
 
-function hasVitest(packageJson: Record<string, unknown> | null): boolean {
+export function hasVitest(
+  packageJson: Record<string, unknown> | null,
+): boolean {
   if (packageJson === null) {
     return false;
   }

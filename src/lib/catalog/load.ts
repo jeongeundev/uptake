@@ -25,7 +25,7 @@ type ValidationResult =
   | { ok: false; reason: string; detail?: string };
 
 const idPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const revisionPattern = /^[0-9a-f]{40}$/i;
+export const revisionPattern = /^[0-9a-f]{40}$/i;
 const bindingKinds = new Set([
   "spec-format",
   "checker",
@@ -53,11 +53,11 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
-function isId(value: unknown): value is string {
+export function isId(value: unknown): value is string {
   return isNonEmptyString(value) && idPattern.test(value);
 }
 
-function isRelativePosixPath(value: unknown): value is string {
+export function isRelativePosixPath(value: unknown): value is string {
   if (
     !isNonEmptyString(value) ||
     isAbsolute(value) ||
