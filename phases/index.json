@@ -34,6 +34,10 @@
       "dir": "2-fix",
       "status": "completed",
       "completed_at": "2026-07-26T19:57:46+0900"
+    },
+    {
+      "dir": "3-survey",
+      "status": "pending"
     }
   ]
 }
