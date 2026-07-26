@@ -54,7 +54,8 @@
       "name": "authoring-api",
       "status": "completed",
       "started_at": "2026-07-26T16:41:32+0900",
-      "summary": "저작 파이프라인을 세션 결속 in-memory 저장소와 엄격한 초안·승인·등재 Route Handler로 연결"
+      "summary": "저작 파이프라인을 세션 결속 in-memory 저장소와 엄격한 초안·승인·등재 Route Handler로 연결",
+      "completed_at": "2026-07-26T16:50:28+0900"
     },
     {
       "step": 7,
