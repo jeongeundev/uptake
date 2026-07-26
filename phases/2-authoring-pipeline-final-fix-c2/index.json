@@ -11,5 +11,6 @@
       "summary": "입력 변경 시 현재 session의 pending/approved draft를 서버에서 폐기하고 직접 approve/register 우회를 막았다."
     }
   ],
-  "created_at": "2026-07-26T18:12:00+0900"
+  "created_at": "2026-07-26T18:12:00+0900",
+  "completed_at": "2026-07-26T19:03:53+0900"
 }
