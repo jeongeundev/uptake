@@ -15,7 +15,9 @@ let testProposer: SurveyProposer | undefined;
 export function configuredSurveyProposer(): SurveyProposer {
   if (testProposer !== undefined) return testProposer;
   if (process.env.UPTAKE_PROPOSER === "stub") {
-    const scriptPath = process.env.UPTAKE_PROPOSER_STUB_SCRIPT;
+    const scriptPath =
+      process.env.UPTAKE_SURVEY_PROPOSER_STUB_SCRIPT ??
+      process.env.UPTAKE_PROPOSER_STUB_SCRIPT;
     if (scriptPath === undefined) {
       throw new AnthropicProposerConfigurationError(
         "UPTAKE_PROPOSER_STUB_SCRIPT is required for the stub proposer",

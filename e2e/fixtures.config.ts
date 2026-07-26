@@ -12,9 +12,11 @@ type FixtureState = {
   root: string;
   catalogDir: string;
   sourceRoot: string;
+  surveyRepository: string;
   targetRoot: string;
   authoringTargetRoot: string;
   proposerStubScript: string;
+  surveyProposerStubScript: string;
   unresolvedProposerStubScript: string;
 };
 
@@ -61,13 +63,39 @@ function createPythonSource(
   return commitRepository(root);
 }
 
+function createSurveySource(sourceRoot: string, repository: string): string {
+  const root = resolve(sourceRoot, repository);
+  const files = [
+    {
+      path: "AGENTS.md",
+      content: "# Development discipline\nRun the repository checks before merging.\n",
+    },
+    {
+      path: "scripts/enforce.py",
+      content: "print('enforce repository checks')\n",
+    },
+    {
+      path: ".github/workflows/verify.yml",
+      content: "name: verify\non: [push]\njobs: {}\n",
+    },
+  ];
+  for (const file of files) {
+    const path = resolve(root, file.path);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, file.content);
+  }
+  return commitRepository(root);
+}
+
 export function createE2EFixtures(): FixtureState {
   const root = mkdtempSync(resolve(tmpdir(), "uptake-e2e-"));
   const sourceRoot = resolve(root, "sources");
   const catalogDir = resolve(root, "catalog");
   const targetRoot = resolve(root, "target-js-vitest");
   const authoringTargetRoot = resolve(root, "authoring-target-js-vitest");
+  const surveyRepository = "fixtures/survey-source";
   const proposerStubScript = resolve(root, "proposer-stub.json");
+  const surveyProposerStubScript = resolve(root, "survey-proposer-stub.json");
   const unresolvedProposerStubScript = resolve(
     root,
     "proposer-stub-unresolved.json",
@@ -90,6 +118,7 @@ export function createE2EFixtures(): FixtureState {
       createPythonSource(sourceRoot, source.repository, index + 1),
     ]),
   );
+  createSurveySource(sourceRoot, surveyRepository);
   const pattern = JSON.parse(
     readFileSync(
       resolve("catalog/spec-change-declaration-gate.json"),
@@ -204,14 +233,48 @@ export function createE2EFixtures(): FixtureState {
       ],
     }),
   );
+  writeFileSync(
+    surveyProposerStubScript,
+    JSON.stringify({
+      metadata: { providerId: "stub", modelId: "survey-e2e" },
+      candidates: [
+        {
+          id: "repository-check-discipline",
+          name: "Repository check discipline",
+          intent: "Keep repository changes aligned with documented checks.",
+          discipline:
+            "The repository documents checks, implements an enforcement script, and runs verification in CI.",
+          tradeoffs:
+            "The observed checks add maintenance cost and may have been inherited from a template.",
+          evidence: [
+            "AGENTS.md",
+            "scripts/enforce.py",
+            ".github/workflows/verify.yml",
+          ],
+          confidence: "high",
+        },
+        {
+          id: "hallucinated-discipline",
+          name: "Hallucinated discipline",
+          intent: "Claim a method without collected evidence.",
+          discipline: "A missing file supposedly enforces a repository rule.",
+          tradeoffs: "This claim has no collected evidence.",
+          evidence: ["missing/not-collected.md"],
+          confidence: "low",
+        },
+      ],
+    }),
+  );
 
   return {
     root,
     catalogDir,
     sourceRoot,
+    surveyRepository,
     targetRoot,
     authoringTargetRoot,
     proposerStubScript,
+    surveyProposerStubScript,
     unresolvedProposerStubScript,
   };
 }
