@@ -21,34 +21,46 @@ function isInside(root: string, candidate: string): boolean {
   );
 }
 
+export function resolveRepositoryRoot(
+  repository: string,
+  sourceRoot = process.env.UPTAKE_SOURCE_ROOT ?? "./.uptake/sources",
+): string | undefined {
+  const absoluteRoot = resolve(sourceRoot);
+  const repositoryPath = resolve(absoluteRoot, repository);
+
+  if (!isInside(absoluteRoot, repositoryPath)) {
+    return undefined;
+  }
+
+  try {
+    if (!statSync(repositoryPath).isDirectory()) {
+      return undefined;
+    }
+
+    const realRoot = realpathSync(absoluteRoot);
+    const realRepository = realpathSync(repositoryPath);
+    return isInside(realRoot, realRepository) ? realRepository : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function resolveProvenance(
   source: Source,
   provenance: Provenance,
   sourceRoot = process.env.UPTAKE_SOURCE_ROOT ?? "./.uptake/sources",
 ): ResolveResult {
-  const absoluteRoot = resolve(sourceRoot);
-  const repositoryPath = resolve(absoluteRoot, source.repository);
-
-  if (!isInside(absoluteRoot, repositoryPath)) {
+  const repositoryRoot = resolveRepositoryRoot(source.repository, sourceRoot);
+  if (repositoryRoot === undefined) {
     return unresolved;
   }
 
   try {
-    if (!statSync(repositoryPath).isDirectory()) {
-      return unresolved;
-    }
-
-    const realRoot = realpathSync(absoluteRoot);
-    const realRepository = realpathSync(repositoryPath);
-    if (!isInside(realRoot, realRepository)) {
-      return unresolved;
-    }
-
     const content = execFileSync(
       "git",
       ["show", `${source.revision}:${provenance.path}`],
       {
-        cwd: realRepository,
+        cwd: repositoryRoot,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"],
       },

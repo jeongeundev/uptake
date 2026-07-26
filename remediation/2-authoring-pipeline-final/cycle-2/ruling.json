@@ -1,0 +1,35 @@
+{
+  "loopId": "2-authoring-pipeline-final",
+  "cycle": 2,
+  "verdict": "Escalate",
+  "gates": {
+    "G1": false,
+    "G2": true,
+    "G3": false,
+    "G4": true,
+    "G5": true,
+    "G6": true
+  },
+  "failedGates": [
+    {
+      "id": "G1",
+      "reason": "open blocker/major: F-001"
+    },
+    {
+      "id": "G3",
+      "reason": "non-terminal blocker/major: F-001"
+    }
+  ],
+  "escalationReasons": [
+    "open blocker/major: F-001",
+    "non-terminal blocker/major: F-001"
+  ],
+  "score": 87,
+  "openFindings": [
+    "F-001"
+  ],
+  "deferredToImplementation": [],
+  "createdAt": "2026-07-26T19:08:59+0900",
+  "readyForHandoff": false,
+  "handoff": null
+}

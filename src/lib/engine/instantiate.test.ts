@@ -55,6 +55,81 @@ describe("instantiate", () => {
     });
   });
 
+  it("generates the same artifacts for a new pattern id with the anchor role shape", () => {
+    const renamedPattern = {
+      ...pattern,
+      patternId: "authored-change-declaration-gate",
+    };
+
+    const result = instantiate(renamedPattern, bindings);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.files.map(({ path, role }) => ({ path, role }))).toEqual([
+      {
+        path: "uptake-gate/declared-changes.ts",
+        role: "spec-artifact",
+      },
+      { path: "uptake-gate/spec-gate.test.ts", role: "spec-check" },
+    ]);
+    expect(result.injection).toEqual({
+      operation: "replace",
+      path: "uptake-gate/declared-changes.ts",
+      marker: pattern.oracle?.injection.marker,
+      replacement: pattern.oracle?.injection.replacement,
+    });
+  });
+
+  it("rejects an anchor role shape missing a role", () => {
+    const missingRolePattern = {
+      ...pattern,
+      roles: pattern.roles.filter(({ id }) => id !== "blocking-gate"),
+    };
+
+    expect(instantiate(missingRolePattern, bindings)).toMatchObject({
+      ok: false,
+      reason: "generation-failed",
+    });
+  });
+
+  it("rejects an anchor role shape with an extra role", () => {
+    const extraRolePattern = {
+      ...pattern,
+      roles: [
+        ...pattern.roles,
+        { id: "extra-role", description: "앵커 템플릿 범위 밖 역할" },
+      ],
+    };
+
+    expect(instantiate(extraRolePattern, bindings)).toMatchObject({
+      ok: false,
+      reason: "generation-failed",
+    });
+  });
+
+  it("rejects an oracle that targets a non-artifact role", () => {
+    if (pattern.oracle === undefined) {
+      throw new Error("seed pattern must have an oracle");
+    }
+    const wrongTargetPattern = {
+      ...pattern,
+      oracle: {
+        ...pattern.oracle,
+        injection: {
+          ...pattern.oracle.injection,
+          targetRole: "spec-check",
+        },
+      },
+    };
+
+    expect(instantiate(wrongTargetPattern, bindings)).toMatchObject({
+      ok: false,
+      reason: "generation-failed",
+    });
+  });
+
   it("is deterministic for the same pattern and bindings", () => {
     expect(instantiate(pattern, bindings)).toEqual(
       instantiate(pattern, bindings),

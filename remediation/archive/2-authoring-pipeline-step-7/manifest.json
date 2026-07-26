@@ -1,0 +1,67 @@
+{
+  "loopId": "2-authoring-pipeline-step-7",
+  "target": {
+    "phase": "2-authoring-pipeline",
+    "branch": "feat-2-authoring-pipeline",
+    "baseCommit": "3b9f4d48a01ea39e1addc8066086335e352743c8"
+  },
+  "createdAt": "2026-07-26T16:59:34+0900",
+  "state": "ready",
+  "currentCycle": 1,
+  "maxCycles": 2,
+  "findings": [
+    {
+      "id": "F-001",
+      "fingerprint": "bdbd0db8ebff",
+      "severity": "major",
+      "category": "contract_violation",
+      "title": "실제 Anthropic proposer가 저작 API에 연결되지 않음",
+      "detail": "createAnthropicProposerFromEnv()가 구현됐지만 프로덕션 코드에서는 호출되지 않는다. configuredAuthoringProposer()는 테스트 전용 전역 변수만 반환하므로, ANTHROPIC_API_KEY와 UPTAKE_PROPOSER_MODEL을 모두 설정해도 POST /api/authoring/drafts는 항상 \"authoring proposer adapter is not configured\"를 반환한다. 따라서 실제 어댑터와 그 metadata가 Step 6 저작 세션을 통해 사용되는 런타임 경로가 없으며, 테스트 주입 없이 앱의 대상 지정 저작 기능을 실행할 수 없다.",
+      "state": "resolved",
+      "raisedInReview": "review-1",
+      "firstSeenCycle": 1,
+      "specRefs": [
+        "phases/2-authoring-pipeline/step6.md — proposer 선택",
+        "phases/2-authoring-pipeline/step7.md — 실제 Anthropic 어댑터 및 저작 세션 메타데이터",
+        "docs/ARCHITECTURE.md — LLM proposer 경계"
+      ],
+      "evidenceFiles": [
+        "src/app/api/authoring/proposer.ts",
+        "src/services/proposer-anthropic.ts",
+        "src/app/api/authoring/drafts/route.ts"
+      ],
+      "suggestedCategory": null,
+      "canonicalId": null,
+      "routedTo": null,
+      "remediationStep": null,
+      "history": [
+        {
+          "cycle": 1,
+          "from": "unresolved",
+          "to": "accepted",
+          "by": "triage",
+          "evidence": "src/app/api/authoring/proposer.ts의 configuredAuthoringProposer()는 testProposer만 반환하고 src/services/proposer-anthropic.ts의 createAnthropicProposerFromEnv()를 호출하지 않는다. phases/2-authoring-pipeline/step6.md:81,95는 기본 proposer 선택을 Route Handler 계층에 두고 환경 설정 시 실제 어댑터를 선택하도록 요구하며, step7.md:55,59는 실제 팩토리와 metadata 전달을 요구한다.",
+          "at": "2026-07-26T16:59:47+0900"
+        },
+        {
+          "cycle": 1,
+          "from": "accepted",
+          "to": "resolved",
+          "by": "closure",
+          "evidence": "해소됨. commit 32198f1에서 configuredAuthoringProposer()가 명시적 테스트 override를 우선하고, override가 없으면 createAnthropicProposerFromEnv()로 실제 Anthropic 어댑터를 생성하도록 연결됐다. 환경변수 누락은 AnthropicProposerConfigurationError로 타입화되어 POST /api/authoring/drafts가 명시적 400 invalid-request로 반환하며, 그 외 생성·SDK 예외는 동일 오류로 위장하지 않고 전파된다. 생성된 proposer는 createAuthoringDraft에 주입되고 proposer.metadata가 저작 응답의 proposer 필드까지 보존된다. 집중 테스트 3개 파일의 13개 테스트가 모두 통과하여 프로덕션 선택, override 우선순위, 설정 오류 처리, 비설정 예외 전파, provider/model metadata 응답 경로를 확인했다.",
+          "at": "2026-07-26T17:05:36+0900"
+        }
+      ]
+    }
+  ],
+  "cycles": [
+    {
+      "cycle": 1,
+      "fixPhase": "2-authoring-pipeline-step-7-fix-c1",
+      "review": null,
+      "closureReview": "review-2",
+      "verdict": "Ready",
+      "reasons": []
+    }
+  ]
+}

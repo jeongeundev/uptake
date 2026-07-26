@@ -1,0 +1,76 @@
+{
+  "reviewId": "review-1",
+  "round": 1,
+  "kind": "full",
+  "target": {
+    "phase": "2-authoring-pipeline",
+    "branch": "feat-2-authoring-pipeline",
+    "baseCommit": "3b9f4d48a01ea39e1addc8066086335e352743c8"
+  },
+  "reviewer": "codex",
+  "createdAt": "2026-07-26T17:20:53+0900",
+  "findings": [
+    {
+      "id": null,
+      "severity": "major",
+      "title": "저작 입력 변경 후 이전 초안과 승인이 폐기되지 않는다",
+      "detail": "초안을 만든 뒤 patternId, name, intent, capability 또는 evidenceStatus를 변경해도 invalidateReview가 호출되지 않으며, 소스 추가·제거도 동일하다. 따라서 화면 상단 입력은 변경된 상태인데 하단의 이전 초안 승인 버튼은 계속 활성화되어, 사용자가 현재 입력과 다른 서버 초안을 승인·등재할 수 있다. ARCHITECTURE의 수명 계약은 이전 입력 변경 시 downstream 생성·검증·승인 상태를 폐기하도록 요구한다.",
+      "evidence": {
+        "files": [
+          "src/components/authoring-wizard.tsx",
+          "docs/ARCHITECTURE.md"
+        ],
+        "spec": [
+          "docs/ARCHITECTURE.md",
+          "phases/2-authoring-pipeline/step8.md"
+        ]
+      },
+      "suggestedFix": "모든 저작 입력 변경과 소스 목록 추가·제거 경로에서 기존 draft, approved, registration 상태를 함께 무효화하고, 실제 상호작용 테스트로 변경 후 승인·등재가 불가능함을 검증한다.",
+      "suggestedCategory": null,
+      "reviewerConfidence": "high",
+      "closureVerdict": null
+    },
+    {
+      "id": null,
+      "severity": "major",
+      "title": "초안 거부가 서버 pending 초안을 폐기하지 않는다",
+      "detail": "‘초안 거부’ 버튼은 클라이언트의 draft 표시만 null로 만들고 서버에 거부 또는 폐기 요청을 보내지 않는다. draft-store에는 rejected 상태나 삭제 연산이 없고 authoring API에도 거부 route가 없으므로, 사용자가 명시적으로 거부한 초안은 서버에서 계속 pending이며 draftId를 보유한 호출자는 이후 승인할 수 있다. 이는 승인/거부만 허용하고 거부 시 초안을 버리라는 Step 8 계약과 맞지 않는다.",
+      "evidence": {
+        "files": [
+          "src/components/authoring-wizard.tsx",
+          "src/services/draft-store.ts",
+          "src/app/api/authoring/drafts/[draftId]/approve/route.ts"
+        ],
+        "spec": [
+          "phases/2-authoring-pipeline/step8.md",
+          "docs/ARCHITECTURE.md",
+          "docs/PRD.md"
+        ]
+      },
+      "suggestedFix": "세션에 결속된 결정적 reject/consume 전이를 서버 저장소와 Route Handler에 추가하고, UI 거부 버튼이 성공 응답 뒤에만 초안을 제거하도록 연결한다. 거부된 draftId의 후속 승인·등재가 거절되는 테스트를 추가한다.",
+      "suggestedCategory": null,
+      "reviewerConfidence": "high",
+      "closureVerdict": null
+    },
+    {
+      "id": null,
+      "severity": "minor",
+      "title": "저작 wizard 테스트가 실제 fetch 기반 화면 흐름을 검증하지 않는다",
+      "detail": "Step 8은 기존 wizard와 같은 방식으로 fetch를 스텁해 서버 응답을 주입하도록 요구하지만, 추가된 테스트는 DraftReview·RegistrationButton·RegistrationResultView를 정적 렌더링하거나 approveAndRegisterDraft 헬퍼만 직접 호출한다. AuthoringWizard의 입력, 초안 요청, 승인, 거부, 등재 상태 전이를 렌더링해 검증하지 않아 입력 변경 후 stale 승인과 클라이언트 전용 거부 같은 결함을 탐지하지 못한다.",
+      "evidence": {
+        "files": [
+          "src/components/authoring-wizard.test.tsx",
+          "src/components/authoring-wizard.tsx",
+          "src/components/catalog-bindings-wizard.test.tsx"
+        ],
+        "spec": [
+          "phases/2-authoring-pipeline/step8.md"
+        ]
+      },
+      "suggestedFix": "AuthoringWizard 자체를 렌더링하고 fetch 스텁과 사용자 이벤트를 사용해 초안 생성→검토→승인→등재 및 거부·입력 변경 차단 흐름을 검증한다.",
+      "suggestedCategory": null,
+      "reviewerConfidence": "high",
+      "closureVerdict": null
+    }
+  ]
+}

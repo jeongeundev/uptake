@@ -1,0 +1,9 @@
+{
+  "cycle": 1,
+  "decisions": {
+    "F-001": {
+      "category": "contract_violation",
+      "evidence": "src/app/api/authoring/proposer.ts의 configuredAuthoringProposer()는 testProposer만 반환하고 src/services/proposer-anthropic.ts의 createAnthropicProposerFromEnv()를 호출하지 않는다. phases/2-authoring-pipeline/step6.md:81,95는 기본 proposer 선택을 Route Handler 계층에 두고 환경 설정 시 실제 어댑터를 선택하도록 요구하며, step7.md:55,59는 실제 팩토리와 metadata 전달을 요구한다."
+    }
+  }
+}

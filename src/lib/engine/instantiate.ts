@@ -1,4 +1,5 @@
 import type { BindingDetection } from "@/lib/engine/detect";
+import { hasAnchorRoleShape } from "@/lib/engine/anchor-shape";
 import type { InstantiatedInjection, Pattern } from "@/types/pattern";
 
 export type GeneratedFile = {
@@ -23,7 +24,6 @@ export type InstantiateResult =
       detail: string;
     };
 
-const supportedPatternId = "spec-change-declaration-gate";
 const artifactPath = "uptake-gate/declared-changes.ts";
 const gatePath = "uptake-gate/spec-gate.test.ts";
 
@@ -55,22 +55,20 @@ export function instantiate(
     };
   }
 
-  if (pattern.patternId !== supportedPatternId || pattern.oracle === undefined) {
+  if (
+    pattern.oracle === undefined ||
+    !hasAnchorRoleShape(pattern) ||
+    pattern.oracle.injection.targetRole !== "spec-artifact"
+  ) {
     return {
       ok: false,
       reason: "generation-failed",
-      detail: `no fixed template is available for pattern ${pattern.patternId}`,
+      detail:
+        "no fixed template is available for this role shape and oracle target",
     };
   }
 
   const { gateTestId, injection: injectionTemplate } = pattern.oracle;
-  if (injectionTemplate.targetRole !== "spec-artifact") {
-    return {
-      ok: false,
-      reason: "generation-failed",
-      detail: `no generated file implements role ${injectionTemplate.targetRole}`,
-    };
-  }
 
   const artifact: GeneratedFile = {
     path: artifactPath,

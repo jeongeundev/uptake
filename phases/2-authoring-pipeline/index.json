@@ -1,0 +1,86 @@
+{
+  "project": "uptake",
+  "phase": "2-authoring-pipeline",
+  "steps": [
+    {
+      "step": 0,
+      "name": "authoring-contract",
+      "status": "completed",
+      "started_at": "2026-07-26T15:51:51+0900",
+      "summary": "저작 도메인 타입, 결정적 proposer 포트·불신 데이터 경계, 호출 기록 가능한 스텁을 테스트와 함께 추가",
+      "completed_at": "2026-07-26T15:57:34+0900"
+    },
+    {
+      "step": 1,
+      "name": "instantiate-role-shape",
+      "status": "completed",
+      "started_at": "2026-07-26T15:57:34+0900",
+      "summary": "instantiate 템플릿 매칭을 patternId 하드코딩에서 정확한 앵커 역할 형태와 oracle target 검사로 전환",
+      "completed_at": "2026-07-26T16:01:50+0900"
+    },
+    {
+      "step": 2,
+      "name": "source-extract",
+      "status": "completed",
+      "started_at": "2026-07-26T16:01:50+0900",
+      "summary": "고정 HEAD에서 파일 후보를 수집하고 resolve 가능한 provenance만 채택하는 결정적 EXTRACT 엔진을 추가",
+      "completed_at": "2026-07-26T16:08:57+0900"
+    },
+    {
+      "step": 3,
+      "name": "abstract-contrast",
+      "status": "completed",
+      "started_at": "2026-07-26T16:08:57+0900",
+      "summary": "사용자 지정 독립성 그룹을 결정적으로 대조해 역할별 corroboration·강등·참조 검사를 수행하는 ABSTRACT 엔진을 추가",
+      "completed_at": "2026-07-26T16:28:01+0900"
+    },
+    {
+      "step": 4,
+      "name": "oracle-selfverify",
+      "status": "completed",
+      "started_at": "2026-07-26T16:28:02+0900",
+      "summary": "앵커 oracle 결정적 초안과 소유권 안전 fixture materialization을 추가하고 실제 VERIFY의 양성 green·음성 red만 저작 자기검증 성공으로 인정"
+    },
+    {
+      "step": 5,
+      "name": "catalog-write",
+      "status": "completed",
+      "started_at": "2026-07-26T16:35:47+0900",
+      "summary": "단일 패턴 하드 게이트 재사용, 세션 결속 초안 승인 저장소, 스테이징 검증 후 무덮어쓰기 원자적 등재를 테스트와 함께 추가",
+      "completed_at": "2026-07-26T16:41:32+0900"
+    },
+    {
+      "step": 6,
+      "name": "authoring-api",
+      "status": "completed",
+      "started_at": "2026-07-26T16:41:32+0900",
+      "summary": "저작 파이프라인을 세션 결속 in-memory 저장소와 엄격한 초안·승인·등재 Route Handler로 연결",
+      "completed_at": "2026-07-26T16:50:28+0900"
+    },
+    {
+      "step": 7,
+      "name": "proposer-adapter",
+      "status": "completed",
+      "started_at": "2026-07-26T16:50:28+0900",
+      "summary": "Anthropic 구조화 출력 proposer 어댑터, 결정적 응답 검증·불신 경계, 선택적 비차단 eval과 설정 문서를 추가",
+      "completed_at": "2026-07-26T17:10:08+0900"
+    },
+    {
+      "step": 8,
+      "name": "authoring-ui",
+      "status": "completed",
+      "started_at": "2026-07-26T17:10:08+0900",
+      "summary": "저작 입력·근거 대조 검토·서버 승인·무덮어쓰기 등재 UI와 정직성 상태 표시를 테스트와 함께 추가",
+      "completed_at": "2026-07-26T17:18:29+0900"
+    },
+    {
+      "step": 9,
+      "name": "authoring-e2e",
+      "status": "completed",
+      "started_at": "2026-07-26T17:44:02+0900",
+      "summary": "명시적 스텁 proposer로 저작·환각 후보 폐기·무덮어쓰기 등재·새 patternId 이식·실제 양성/음성 VERIFY·승인 적용을 관통하는 브라우저 E2E를 추가"
+    }
+  ],
+  "created_at": "2026-07-26T15:51:51+0900",
+  "completed_at": "2026-07-26T19:19:58+0900"
+}
