@@ -365,6 +365,11 @@ export default function AuthoringWizard() {
   );
 
   function invalidateReview() {
+    if (draft) {
+      void postJson(`/api/authoring/drafts/${draft.draftId}/reject`, {}).catch(
+        () => undefined,
+      );
+    }
     setDraft(null);
     setApproved(false);
     setRegistration(null);

@@ -53,7 +53,7 @@ export function rejectDraft(
   if (draft === undefined || draft.sessionId !== sessionId) {
     return { ok: false, reason: "unknown-draft" };
   }
-  if (draft.status !== "pending") {
+  if (draft.status !== "pending" && draft.status !== "approved") {
     return { ok: false, reason: "invalid-state" };
   }
   draft.status = "rejected";

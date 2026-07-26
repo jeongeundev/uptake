@@ -124,9 +124,10 @@ describe("draft store", () => {
 
     const approvedId = createDraft(input);
     expect(approveDraft(approvedId, input.sessionId)).toEqual({ ok: true });
-    expect(rejectDraft(approvedId, input.sessionId)).toEqual({
+    expect(rejectDraft(approvedId, input.sessionId)).toEqual({ ok: true });
+    expect(consumeApprovedDraft(approvedId, input.sessionId)).toEqual({
       ok: false,
-      reason: "invalid-state",
+      reason: "not-approved",
     });
 
     const consumedId = createDraft(input);

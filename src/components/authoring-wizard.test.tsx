@@ -172,6 +172,12 @@ describe("AuthoringWizard", () => {
     });
     expect(screen.queryByLabelText("저작 초안 검토")).toBeNull();
     expect(screen.queryByRole("button", { name: "카탈로그 등재" })).toBeNull();
+    await waitFor(() =>
+      expect(request.mock.calls.map(([input]) => String(input))).toEqual([
+        "/api/authoring/drafts",
+        "/api/authoring/drafts/draft-1/reject",
+      ]),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "초안 생성" }));
     await screen.findByLabelText("저작 초안 검토");
