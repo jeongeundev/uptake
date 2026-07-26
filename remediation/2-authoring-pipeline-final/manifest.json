@@ -6,7 +6,7 @@
     "baseCommit": "3b9f4d48a01ea39e1addc8066086335e352743c8"
   },
   "createdAt": "2026-07-26T17:55:16+0900",
-  "state": "remediating",
+  "state": "closing",
   "currentCycle": 2,
   "maxCycles": 2,
   "findings": [
@@ -102,6 +102,14 @@
       "fixPhase": "2-authoring-pipeline-final-fix-c1",
       "review": null,
       "closureReview": "review-2",
+      "verdict": null,
+      "reasons": []
+    },
+    {
+      "cycle": 2,
+      "fixPhase": "2-authoring-pipeline-final-fix-c2",
+      "review": null,
+      "closureReview": null,
       "verdict": null,
       "reasons": []
     }
