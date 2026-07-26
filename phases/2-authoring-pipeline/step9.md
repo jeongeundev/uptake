@@ -1,5 +1,16 @@
 # Step 9: authoring-e2e
 
+> **먼저 읽어라 — 이 step에서 절대 하지 않는 것**
+>
+> 이 step 안에서 **리뷰나 remediation loop를 돌리지 마라.** `$remediate` 호출,
+> `scripts/execute.py` 재귀 실행, 새 phase 디렉터리(`phases/*-fix-c*`) 생성,
+> `remediation/` 아래 산출물 작성이 모두 금지다.
+>
+> 이유: 코드를 쓴 세션이 스스로 리뷰하면 자기채점이다(ADR-008). 적대적 리뷰는 phase
+> 완료 후 **독립 세션**의 `$remediate`가 맡는다. step 7에서 이 금지를 어긴 전례가 있으니
+> 결함을 발견하더라도 리뷰 절차를 열지 말고, 이 step 문서가 요구한 작업만 하라.
+> 범위 밖의 결함을 발견하면 고치지 말고 step summary에 한 줄로 적어라.
+
 PRD "Phase 2 범위"의 마지막 요구사항 — **전체 흐름 연결(앵커 형태)** — 을 실행 가능한 증거로 만든다. 앱이 저작·등재한 앵커 형태 generative 패턴 하나가 곧바로 INSTANTIATE(역할 형태 매칭) → VERIFY로 이식·검증까지 이어지는 것을 E2E 1건으로 증명한다.
 
 ## 이 E2E의 결정성
