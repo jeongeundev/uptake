@@ -6,7 +6,7 @@
     "baseCommit": "8c5062c9ef9bfe9beb927886080077c54a4af19a"
   },
   "createdAt": "2026-07-27T02:52:25+0900",
-  "state": "remediating",
+  "state": "ready",
   "currentCycle": 1,
   "maxCycles": 2,
   "findings": [
@@ -17,7 +17,7 @@
       "category": "contract_violation",
       "title": "모든 후보가 폐기되면 폐기 경로와 사유가 사용자에게 사라진다",
       "detail": "surveyRepository는 모든 제안이 invalid-shape, duplicate-id 또는 no-evidence로 폐기되면 누적한 discardedEvidence와 discardedCandidates를 버리고 일반적인 no-candidate 오류만 반환한다. runSurvey도 이 일반 detail만 전달하며 SurveyWizard는 성공 응답일 때만 Discards를 렌더링한다. 따라서 환각 근거만 제안된 실행에서는 사용자가 어떤 경로가 not-collected였고 어떤 후보가 no-evidence로 폐기됐는지 볼 수 없다. 이는 두 단계의 모든 폐기를 사유와 함께 보여야 하며 조용히 사라지는 후보가 없어야 한다는 SURVEY 계약을 위반한다.",
-      "state": "accepted",
+      "state": "resolved",
       "raisedInReview": "review-1",
       "firstSeenCycle": 1,
       "specRefs": [
@@ -42,6 +42,14 @@
           "by": "triage",
           "evidence": "src/lib/engine/survey.ts의 candidates.length===0 분기는 discardedEvidence/discardedCandidates를 버린 일반 no-candidate만 반환하고, src/services/survey-service.ts도 detail만 전달한다. ARCHITECTURE SURVEY 환각 폐기 계약의 사유·경로 표시 요구 위반이 실재한다.",
           "at": "2026-07-27T02:52:47+0900"
+        },
+        {
+          "cycle": 1,
+          "from": "accepted",
+          "to": "resolved",
+          "by": "closure",
+          "evidence": "해결됨. no-candidate 결과가 조사 revision과 모든 폐기·skip 기록을 Route와 UI까지 보존하며 관련 회귀 테스트가 통과했다.",
+          "at": "2026-07-27T03:02:25+0900"
         }
       ]
     },
@@ -52,7 +60,7 @@
       "category": "contract_violation",
       "title": "SURVEY 구조화 출력 소진 오류가 화면에 명시적으로 표면화되지 않는다",
       "detail": "Anthropic 어댑터는 JSON 파싱 또는 스키마 검증이 세 번 실패하면 일반 Error를 던진다. SURVEY Route Handler는 proposer 구성 오류만 잡고 runSurvey에서 발생한 이 오류는 처리하지 않는다. 클라이언트 postJson은 모든 응답이 JSON이라고 가정하며 investigate에도 try/finally가 없으므로, 프레임워크의 비정형 500 응답에서는 response.json()이 거부되고 UI는 오류 상세를 표시하지 못한 채 busy 상태에 남을 수 있다. 결정적 재검증 실패를 부분 후보 없이 명시적 오류로 표면화한다는 proposer 계약의 후반부가 제품 경계에서 성립하지 않는다.",
-      "state": "accepted",
+      "state": "resolved",
       "raisedInReview": "review-1",
       "firstSeenCycle": 1,
       "specRefs": [
@@ -76,6 +84,14 @@
           "by": "triage",
           "evidence": "src/services/proposer-anthropic.ts의 3회 소진은 일반 Error이며 src/app/api/survey/route.ts는 구성 오류만 구조화한다. src/components/survey-wizard.tsx의 postJson/investigate는 JSON parse rejection을 처리하지 않아 busy 해제와 명시적 오류 표면화 계약이 성립하지 않는다.",
           "at": "2026-07-27T02:52:47+0900"
+        },
+        {
+          "cycle": 1,
+          "from": "accepted",
+          "to": "resolved",
+          "by": "closure",
+          "evidence": "해결됨. 3회 소진 전용 오류가 Route의 구조화 JSON으로 변환되고 UI가 네트워크·JSON 오류를 표시한 뒤 busy를 해제한다.",
+          "at": "2026-07-27T03:02:25+0900"
         }
       ]
     },
@@ -86,7 +102,7 @@
       "category": "contract_violation",
       "title": "SURVEY 채택의 independenceGroup이 저장소 식별자 그대로가 아니다",
       "detail": "채택 조립표는 sources[0].independenceGroup을 사용자가 지정한 저장소 식별자 그대로 저장하도록 고정한다. 구현은 repository를 소문자 kebab 형태의 sourceId로 정규화한 뒤 그 sourceId를 independenceGroup에도 사용한다. 예를 들어 서로 다른 식별자 a/b와 a-b가 같은 그룹 값으로 직렬화될 수 있으며, 등재물도 문서화된 결정적 조립 결과와 달라진다.",
-      "state": "accepted",
+      "state": "resolved",
       "raisedInReview": "review-1",
       "firstSeenCycle": 1,
       "specRefs": [
@@ -107,9 +123,26 @@
           "by": "triage",
           "evidence": "src/lib/engine/survey-adopt.ts가 initialRequest.sources[0].independenceGroup에 정규화 sourceId를 저장한다. ARCHITECTURE AuthoringRequest 자동 조립표는 저장소 식별자 그대로를 고정하므로 직렬화 계약 위반이 실재한다.",
           "at": "2026-07-27T02:52:47+0900"
+        },
+        {
+          "cycle": 1,
+          "from": "accepted",
+          "to": "resolved",
+          "by": "closure",
+          "evidence": "해결됨. sourceId는 참조 키로만 사용되고 independenceGroup에는 input.repository 원문이 조립·직렬화된다.",
+          "at": "2026-07-27T03:02:25+0900"
         }
       ]
     }
   ],
-  "cycles": []
+  "cycles": [
+    {
+      "cycle": 1,
+      "fixPhase": "3-survey-fix-c1",
+      "review": null,
+      "closureReview": "review-2",
+      "verdict": "Ready",
+      "reasons": []
+    }
+  ]
 }

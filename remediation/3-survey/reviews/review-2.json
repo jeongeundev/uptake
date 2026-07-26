@@ -1,0 +1,80 @@
+{
+  "reviewId": "review-2",
+  "round": 2,
+  "kind": "closure",
+  "target": {
+    "phase": "3-survey",
+    "branch": "feat-3-survey",
+    "baseCommit": "8c5062c9ef9bfe9beb927886080077c54a4af19a"
+  },
+  "reviewer": "codex",
+  "createdAt": "2026-07-27T03:01:36+0900",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "title": "모든 후보가 폐기되면 폐기 경로와 사유가 사용자에게 사라진다",
+      "detail": "해결됨. no-candidate 결과가 조사 revision과 모든 폐기·skip 기록을 Route와 UI까지 보존하며 관련 회귀 테스트가 통과했다.",
+      "evidence": {
+        "files": [
+          "src/lib/engine/survey.ts",
+          "src/services/survey-service.ts",
+          "src/components/survey-wizard.tsx",
+          "src/lib/engine/survey.test.ts",
+          "src/services/survey-service.test.ts",
+          "src/components/survey-wizard.test.tsx",
+          "src/__tests__/survey-route.test.ts"
+        ],
+        "spec": [
+          "docs/ARCHITECTURE.md 「SURVEY 계약 — 환각 폐기 — 2단」",
+          "docs/PRD.md 「Phase 3 범위 — 모든 후보 근거는 고정된 revision에서 resolve된다」",
+          "ADR-009"
+        ]
+      },
+      "suggestedCategory": null,
+      "reviewerConfidence": "high",
+      "closureVerdict": "resolved"
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "title": "SURVEY 구조화 출력 소진 오류가 화면에 명시적으로 표면화되지 않는다",
+      "detail": "해결됨. 3회 소진 전용 오류가 Route의 구조화 JSON으로 변환되고 UI가 네트워크·JSON 오류를 표시한 뒤 busy를 해제한다.",
+      "evidence": {
+        "files": [
+          "src/services/proposer-anthropic.ts",
+          "src/app/api/survey/route.ts",
+          "src/components/survey-wizard.tsx",
+          "src/services/proposer-anthropic.test.ts",
+          "src/__tests__/survey-route.test.ts",
+          "src/components/survey-wizard.test.tsx"
+        ],
+        "spec": [
+          "docs/ARCHITECTURE.md 「SURVEY proposer 경계」",
+          "ADR-015"
+        ]
+      },
+      "suggestedCategory": null,
+      "reviewerConfidence": "high",
+      "closureVerdict": "resolved"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "title": "SURVEY 채택의 independenceGroup이 저장소 식별자 그대로가 아니다",
+      "detail": "해결됨. sourceId는 참조 키로만 사용되고 independenceGroup에는 input.repository 원문이 조립·직렬화된다.",
+      "evidence": {
+        "files": [
+          "src/lib/engine/survey-adopt.ts",
+          "src/lib/engine/survey-adopt.test.ts"
+        ],
+        "spec": [
+          "docs/ARCHITECTURE.md 「SURVEY 계약 — AuthoringRequest 자동 조립」"
+        ]
+      },
+      "suggestedCategory": null,
+      "reviewerConfidence": "high",
+      "closureVerdict": "resolved"
+    }
+  ]
+}
