@@ -16,7 +16,7 @@
       "name": "authoring-ui-input-binding",
       "status": "completed",
       "started_at": "2026-07-26T19:40:27+0900",
-      "completed_at": "2026-07-26T19:45:44+0900",
+      "completed_at": "2026-07-26T19:57:46+0900",
       "summary": "저작 UI가 현재 입력을 초안 생성·승인·등재에 동일하게 전송하고 stale-input을 오류로 표면화하도록 배선했다."
     }
   ],
