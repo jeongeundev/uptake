@@ -404,6 +404,5 @@ type Pattern = {
 | `descriptive` 패턴 최소 수량(ADR-003의 "넓게") · 씨앗 "성공 repo" 선정 근거 기록 | M0 카탈로깅 스파이크 |
 | **ABSTRACT 대조 규칙** — role/binding 후보 경계, 역할 정합·병합, 근거 중복 제거 | ABSTRACT 구현 (phase 2) |
 | **카탈로그 쓰기** — `patternId` 생성·충돌, 원자적 쓰기, 기존 파일 덮어쓰기 정책, 승인 저장소 결속 | 카탈로그 쓰기 구현 (phase 2) |
-| **SURVEY 수집 규칙의 초기 목록** — 어느 생태계를 몇 개 카테고리로 덮는가, 예산 기본값 | SURVEY 수집기 구현 (phase 3) |
 | **SURVEY 프롬프트 문안** — `discipline` 지시 문구, 후보 수 상한, 구조화 출력 실패 시 재시도 | SURVEY proposer 구현 (phase 3) |
 | **SURVEY 표면** — 후보 목록·폐기 사유의 표시 형태, 한계 고지 문안, 채택→승인 API 경계 | SURVEY UI/API 구현 (phase 3) |
