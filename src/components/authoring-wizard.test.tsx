@@ -13,6 +13,7 @@ import {
   RegistrationResultView,
   type DraftedResponse,
 } from "@/components/authoring-wizard";
+import type { AuthoringRequest } from "@/types/authoring";
 
 afterEach(() => {
   cleanup();
@@ -85,6 +86,24 @@ const draft: DraftedResponse = {
   ],
   selfVerify: { status: "skipped", reason: "descriptive" },
   proposer: { providerId: "stub", modelId: "deterministic" },
+};
+
+const authoringRequest: AuthoringRequest = {
+  patternId: "observed-loop",
+  name: "Observed loop",
+  intent: "Observe a loop",
+  capability: "descriptive",
+  evidenceStatus: "observed",
+  sources: [
+    {
+      id: "source-1",
+      repository: "example/one",
+      stack: "php/pest",
+      isTargetStack: false,
+      independenceGroup: "group-one",
+      independenceNote: "Independent maintainer.",
+    },
+  ],
 };
 
 function jsonResponse(body: unknown): Response {
@@ -161,6 +180,12 @@ describe("AuthoringWizard", () => {
       "/api/authoring/drafts/draft-1/approve",
       "/api/authoring/drafts/draft-1/register",
     ]);
+    expect(
+      request.mock.calls.slice(1).map(([, init]) => JSON.parse(String(init?.body))),
+    ).toEqual([
+      { request: authoringRequest },
+      { request: authoringRequest },
+    ]);
   });
 
   it("removes stale review and registration controls when any request input or source list changes", async () => {
@@ -172,18 +197,66 @@ describe("AuthoringWizard", () => {
     });
     expect(screen.queryByLabelText("저작 초안 검토")).toBeNull();
     expect(screen.queryByRole("button", { name: "카탈로그 등재" })).toBeNull();
-    await waitFor(() =>
-      expect(request.mock.calls.map(([input]) => String(input))).toEqual([
-        "/api/authoring/drafts",
-        "/api/authoring/drafts/draft-1/reject",
-      ]),
-    );
+    expect(request.mock.calls.map(([input]) => String(input))).toEqual([
+      "/api/authoring/drafts",
+    ]);
 
     fireEvent.click(screen.getByRole("button", { name: "초안 생성" }));
     await screen.findByLabelText("저작 초안 검토");
     fireEvent.click(screen.getByRole("button", { name: "소스 추가" }));
     expect(screen.queryByLabelText("저작 초안 검토")).toBeNull();
     expect(screen.queryByRole("button", { name: "카탈로그 등재" })).toBeNull();
+  });
+
+  it("sends the current authoring request when approving a draft", async () => {
+    const request = vi.fn(
+      async (input: RequestInfo | URL) =>
+        jsonResponse(
+          String(input).endsWith("/approve")
+            ? { status: "approved" }
+            : draft,
+        ),
+    );
+    await createDraftThroughWizard(request);
+
+    fireEvent.click(screen.getByRole("button", { name: "초안 승인" }));
+    await screen.findByRole("button", { name: "서버 승인 완료" });
+
+    const approveCall = request.mock.calls.find(([input]) =>
+      String(input).endsWith("/approve"),
+    );
+    expect(JSON.parse(String(approveCall?.[1]?.body))).toEqual({
+      request: authoringRequest,
+    });
+  });
+
+  it("shows stale input as an error and never as successful registration", async () => {
+    const request = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/approve")) return jsonResponse({ status: "approved" });
+      if (url.endsWith("/register")) {
+        return jsonResponse({
+          status: "stale-input",
+          detail: "fingerprint mismatch",
+        });
+      }
+      return jsonResponse(draft);
+    });
+    await createDraftThroughWizard(request);
+
+    fireEvent.click(screen.getByRole("button", { name: "초안 승인" }));
+    await screen.findByRole("button", { name: "서버 승인 완료" });
+    fireEvent.click(screen.getByRole("button", { name: "카탈로그 등재" }));
+
+    await screen.findByText("stale-input");
+    expect(
+      screen.getByText(
+        "입력이 바뀌어 이전 초안이 무효가 되었습니다. 새 초안을 생성하세요.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText("카탈로그에 등재되었습니다."),
+    ).toBeNull();
   });
 
   it("keeps the draft visible until reject succeeds, then removes its controls", async () => {
@@ -257,7 +330,9 @@ describe("AuthoringWizard", () => {
       );
     };
 
-    await expect(approveAndRegisterDraft("draft-1", request)).resolves.toEqual({
+    await expect(
+      approveAndRegisterDraft("draft-1", authoringRequest, request),
+    ).resolves.toEqual({
       status: "draft-not-found",
       detail: "not pending",
     });

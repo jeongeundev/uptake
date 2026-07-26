@@ -3,6 +3,7 @@
 import React, { useState, type FormEvent } from "react";
 
 import type {
+  AuthoringRequest,
   CorroborationReport,
   DiscardedCandidate,
   TargetStackFact,
@@ -40,6 +41,12 @@ type SourceInput = {
   independenceNote: string;
 };
 
+const staleInputError: ErrorResponse = {
+  status: "stale-input",
+  detail:
+    "입력이 바뀌어 이전 초안이 무효가 되었습니다. 새 초안을 생성하세요.",
+};
+
 const emptySource = (): SourceInput => ({
   repository: "",
   stack: "",
@@ -63,11 +70,12 @@ async function postJson(
 
 export async function approveAndRegisterDraft(
   draftId: string,
+  authoringRequest: AuthoringRequest,
   request: Requester = fetch,
 ): Promise<RegistrationResult> {
   const approved = (await postJson(
     `/api/authoring/drafts/${draftId}/approve`,
-    {},
+    { request: authoringRequest },
     request,
   )) as { status: string; detail?: string };
   if (approved.status !== "approved") {
@@ -78,7 +86,7 @@ export async function approveAndRegisterDraft(
   }
   return (await postJson(
     `/api/authoring/drafts/${draftId}/register`,
-    {},
+    { request: authoringRequest },
     request,
   )) as RegistrationResult;
 }
@@ -365,14 +373,27 @@ export default function AuthoringWizard() {
   );
 
   function invalidateReview() {
-    if (draft) {
-      void postJson(`/api/authoring/drafts/${draft.draftId}/reject`, {}).catch(
-        () => undefined,
-      );
-    }
     setDraft(null);
     setApproved(false);
     setRegistration(null);
+  }
+
+  function currentAuthoringRequest(): AuthoringRequest {
+    return {
+      patternId,
+      name,
+      intent,
+      capability,
+      evidenceStatus,
+      sources: sources.map((source, index) => ({
+        id: `source-${index + 1}`,
+        repository: source.repository,
+        stack: source.stack,
+        isTargetStack: source.isTargetStack === "true",
+        independenceGroup: source.independenceGroup,
+        independenceNote: source.independenceNote,
+      })),
+    };
   }
 
   function updateSource(
@@ -393,21 +414,10 @@ export default function AuthoringWizard() {
     setBusy(true);
     setError(null);
     invalidateReview();
-    const response = (await postJson("/api/authoring/drafts", {
-      patternId,
-      name,
-      intent,
-      capability,
-      evidenceStatus,
-      sources: sources.map((source, index) => ({
-        id: `source-${index + 1}`,
-        repository: source.repository,
-        stack: source.stack,
-        isTargetStack: source.isTargetStack === "true",
-        independenceGroup: source.independenceGroup,
-        independenceNote: source.independenceNote,
-      })),
-    })) as DraftedResponse | ErrorResponse;
+    const response = (await postJson(
+      "/api/authoring/drafts",
+      currentAuthoringRequest(),
+    )) as DraftedResponse | ErrorResponse;
     if ("draftId" in response) setDraft(response);
     else setError(response);
     setBusy(false);
@@ -418,9 +428,10 @@ export default function AuthoringWizard() {
     setBusy(true);
     const response = (await postJson(
       `/api/authoring/drafts/${draft.draftId}/approve`,
-      {},
+      { request: currentAuthoringRequest() },
     )) as { status: string; detail?: string };
     if (response.status === "approved") setApproved(true);
+    else if (response.status === "stale-input") setError(staleInputError);
     else
       setError({
         status: response.status,
@@ -432,12 +443,16 @@ export default function AuthoringWizard() {
   async function register() {
     if (!draft || !approved) return;
     setBusy(true);
-    setRegistration(
-      (await postJson(
-        `/api/authoring/drafts/${draft.draftId}/register`,
-        {},
-      )) as RegistrationResult,
-    );
+    const response = (await postJson(
+      `/api/authoring/drafts/${draft.draftId}/register`,
+      { request: currentAuthoringRequest() },
+    )) as RegistrationResult;
+    if (response.status === "stale-input") {
+      setRegistration(null);
+      setError(staleInputError);
+    } else {
+      setRegistration(response);
+    }
     setBusy(false);
   }
 

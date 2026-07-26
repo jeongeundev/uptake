@@ -32,7 +32,8 @@
     },
     {
       "dir": "2-fix",
-      "status": "pending"
+      "status": "completed",
+      "completed_at": "2026-07-26T19:45:44+0900"
     }
   ]
 }
