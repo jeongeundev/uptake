@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   __resetDraftStoreForTests,
-  approveDraft,
-  consumeApprovedDraft,
+  approveDraft as approveStoredDraft,
+  consumeApprovedDraft as consumeStoredDraft,
   createDraft,
+  hashAuthoringRequest,
   rejectDraft,
 } from "@/services/draft-store";
+import type { AuthoringRequest } from "@/types/authoring";
 import type { Pattern } from "@/types/pattern";
 
 const pattern = {
@@ -35,11 +37,38 @@ const pattern = {
   tradeoffs: "Observed once.",
 } satisfies Pattern;
 
+const request = {
+  patternId: "draft-pattern",
+  name: "Draft pattern",
+  intent: "Describe a method.",
+  capability: "descriptive",
+  evidenceStatus: "observed",
+  sources: [
+    {
+      id: "source",
+      repository: "example/source",
+      stack: "text",
+      isTargetStack: false,
+      independenceGroup: "source",
+      independenceNote: "Independent fixture.",
+    },
+  ],
+} satisfies AuthoringRequest;
+const requestFingerprint = hashAuthoringRequest(request);
 const input = {
   sessionId: "session-one",
+  requestFingerprint,
   pattern,
   proposerMetadata: { providerId: "stub", modelId: "fixture" },
 };
+
+function approveDraft(draftId: string, sessionId: string) {
+  return approveStoredDraft(draftId, sessionId, requestFingerprint);
+}
+
+function consumeApprovedDraft(draftId: string, sessionId: string) {
+  return consumeStoredDraft(draftId, sessionId, requestFingerprint);
+}
 
 beforeEach(__resetDraftStoreForTests);
 
@@ -77,6 +106,53 @@ describe("draft store", () => {
       ok: false,
       reason: "unknown-draft",
     });
+  });
+
+  it("checks session ownership before fingerprint and treats source order as input", () => {
+    const reorderedRequest = {
+      ...request,
+      sources: [
+        {
+          ...request.sources[0],
+          id: "second",
+          repository: "example/second",
+          independenceGroup: "second",
+        },
+        request.sources[0],
+      ],
+    };
+    const originalRequest = {
+      ...request,
+      sources: [
+        request.sources[0],
+        {
+          ...request.sources[0],
+          id: "second",
+          repository: "example/second",
+          independenceGroup: "second",
+        },
+      ],
+    };
+    const originalFingerprint = hashAuthoringRequest(originalRequest);
+    const reorderedFingerprint = hashAuthoringRequest(reorderedRequest);
+    expect(reorderedFingerprint).not.toBe(originalFingerprint);
+
+    const draftId = createDraft({
+      ...input,
+      requestFingerprint: originalFingerprint,
+    });
+    expect(
+      approveStoredDraft(draftId, "session-two", reorderedFingerprint),
+    ).toEqual({ ok: false, reason: "unknown-draft" });
+    expect(
+      approveStoredDraft(draftId, input.sessionId, reorderedFingerprint),
+    ).toEqual({ ok: false, reason: "stale-input" });
+    expect(
+      approveStoredDraft(draftId, input.sessionId, originalFingerprint),
+    ).toEqual({ ok: true });
+    expect(
+      consumeStoredDraft(draftId, input.sessionId, reorderedFingerprint),
+    ).toEqual({ ok: false, reason: "stale-input" });
   });
 
   it("invalidates prior active drafts only in the same session", () => {

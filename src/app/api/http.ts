@@ -59,6 +59,7 @@ export function statusCode(status: string): number {
   }
   if (
     status === "invalid-request" ||
+    status === "stale-input" ||
     status === "generation-blocked" ||
     status === "target-ineligible" ||
     status === "not-prepared" ||

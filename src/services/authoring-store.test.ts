@@ -23,10 +23,10 @@ vi.mock("@/lib/engine/self-verify", () => ({
 
 import {
   __resetAuthoringStoreForTests,
-  approveAuthoringDraft,
+  approveAuthoringDraft as approveStoredAuthoringDraft,
   createAuthoringDraft,
   rejectAuthoringDraft,
-  registerAuthoringDraft,
+  registerAuthoringDraft as registerStoredAuthoringDraft,
 } from "./authoring-store";
 
 let root: string;
@@ -109,6 +109,22 @@ function proposer(capability: AuthoringRequest["capability"] = "descriptive") {
       tradeoffs: "Observed in successful repositories.",
     },
   });
+}
+
+function approveAuthoringDraft(
+  sessionId: string,
+  draftId: string,
+  input = request(),
+) {
+  return approveStoredAuthoringDraft(sessionId, draftId, input);
+}
+
+function registerAuthoringDraft(
+  sessionId: string,
+  draftId: string,
+  input = request(),
+) {
+  return registerStoredAuthoringDraft(sessionId, draftId, input);
 }
 
 beforeEach(() => {
@@ -228,7 +244,11 @@ describe("authoring store", () => {
     expect(approved.status).toBe("drafted");
     if (approved.status !== "drafted") return;
     expect(
-      approveAuthoringDraft("session-one", approved.draftId),
+      approveAuthoringDraft(
+        "session-one",
+        approved.draftId,
+        request({ patternId: "approved-method" }),
+      ),
     ).toEqual({ status: "approved" });
 
     const otherSession = await createAuthoringDraft(
@@ -247,16 +267,32 @@ describe("authoring store", () => {
     expect(replacement.status).toBe("drafted");
 
     expect(
-      approveAuthoringDraft("session-one", pending.draftId),
+      approveAuthoringDraft(
+        "session-one",
+        pending.draftId,
+        request({ patternId: "pending-method" }),
+      ),
     ).toMatchObject({ status: "draft-not-found" });
     expect(
-      registerAuthoringDraft("session-one", pending.draftId),
+      registerAuthoringDraft(
+        "session-one",
+        pending.draftId,
+        request({ patternId: "pending-method" }),
+      ),
     ).toMatchObject({ status: "not-approved" });
     expect(
-      registerAuthoringDraft("session-one", approved.draftId),
+      registerAuthoringDraft(
+        "session-one",
+        approved.draftId,
+        request({ patternId: "approved-method" }),
+      ),
     ).toMatchObject({ status: "not-approved" });
     expect(
-      approveAuthoringDraft("session-two", otherSession.draftId),
+      approveAuthoringDraft(
+        "session-two",
+        otherSession.draftId,
+        request({ patternId: "other-method" }),
+      ),
     ).toEqual({ status: "approved" });
   });
 });

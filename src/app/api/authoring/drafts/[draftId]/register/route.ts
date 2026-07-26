@@ -2,10 +2,14 @@ import { type NextRequest } from "next/server";
 
 import {
   jsonWithSession,
+  readJson,
   sessionIdFor,
   statusCode,
 } from "@/app/api/http";
-import { registerAuthoringDraft } from "@/services/authoring-store";
+import {
+  isAuthoringRequest,
+  registerAuthoringDraft,
+} from "@/services/authoring-store";
 
 export const runtime = "nodejs";
 
@@ -15,7 +19,20 @@ export async function POST(
 ) {
   const sessionId = sessionIdFor(request);
   const { draftId } = await context.params;
-  const result = registerAuthoringDraft(sessionId, draftId);
+  const body = await readJson(request);
+  if (
+    body === undefined ||
+    Object.keys(body).length !== 1 ||
+    !isAuthoringRequest(body.request)
+  ) {
+    return jsonWithSession(
+      request,
+      sessionId,
+      { status: "invalid-request", detail: "invalid authoring request" },
+      400,
+    );
+  }
+  const result = registerAuthoringDraft(sessionId, draftId, body.request);
   return jsonWithSession(
     request,
     sessionId,

@@ -10,6 +10,7 @@ import {
   approveDraft,
   consumeApprovedDraft,
   createDraft,
+  hashAuthoringRequest,
   rejectDraft,
   __resetDraftStoreForTests,
 } from "@/services/draft-store";
@@ -31,6 +32,7 @@ export type AuthoringError = {
     | "contrast-failed"
     | "oracle-not-anchor"
     | "self-verify-failed"
+    | "stale-input"
     | "not-approved"
     | "register-rejected";
   detail: string;
@@ -185,6 +187,7 @@ export async function createAuthoringDraft(
 
   const draftId = createDraft({
     sessionId,
+    requestFingerprint: hashAuthoringRequest(request),
     pattern,
     proposerMetadata: proposer.metadata,
   });
@@ -203,9 +206,24 @@ export async function createAuthoringDraft(
 export function approveAuthoringDraft(
   sessionId: string,
   draftId: string,
+  request: AuthoringRequest,
 ): { status: "approved" } | AuthoringError {
-  const result = approveDraft(draftId, sessionId);
+  if (!isAuthoringRequest(request)) {
+    return { status: "invalid-request", detail: "invalid authoring request" };
+  }
+  const result = approveDraft(
+    draftId,
+    sessionId,
+    hashAuthoringRequest(request),
+  );
   if (!result.ok) {
+    if (result.reason === "stale-input") {
+      return {
+        status: "stale-input",
+        detail:
+          "the draft was created from different input than the approval request",
+      };
+    }
     return {
       status: "draft-not-found",
       detail:
@@ -237,11 +255,26 @@ export function rejectAuthoringDraft(
 export function registerAuthoringDraft(
   sessionId: string,
   draftId: string,
+  request: AuthoringRequest,
 ): { status: "registered"; path: string } | AuthoringError {
-  const consumed = consumeApprovedDraft(draftId, sessionId);
+  if (!isAuthoringRequest(request)) {
+    return { status: "invalid-request", detail: "invalid authoring request" };
+  }
+  const consumed = consumeApprovedDraft(
+    draftId,
+    sessionId,
+    hashAuthoringRequest(request),
+  );
   if (!consumed.ok) {
     if (consumed.reason === "unknown-draft") {
       return { status: "draft-not-found", detail: "draft was not found" };
+    }
+    if (consumed.reason === "stale-input") {
+      return {
+        status: "stale-input",
+        detail:
+          "the draft was created from different input than the registration request",
+      };
     }
     return {
       status: "not-approved",

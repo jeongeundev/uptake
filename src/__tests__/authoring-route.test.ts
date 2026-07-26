@@ -1,5 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { NextRequest } from "next/server";
@@ -19,6 +25,7 @@ import {
   createAuthoringDraft,
 } from "@/services/authoring-store";
 import { createStubProposer } from "@/services/proposer-stub";
+import type { AuthoringRequest } from "@/types/authoring";
 
 vi.mock("@/services/proposer-anthropic", async (importOriginal) => {
   const actual =
@@ -27,6 +34,41 @@ vi.mock("@/services/proposer-anthropic", async (importOriginal) => {
 });
 
 let root: string;
+let catalogDir: string;
+
+function authoringRequest(
+  overrides: Partial<AuthoringRequest> = {},
+): AuthoringRequest {
+  return {
+    patternId: "method",
+    name: "Method",
+    intent: "Observe method",
+    capability: "descriptive",
+    evidenceStatus: "observed",
+    sources: [
+      {
+        id: "one",
+        repository: "example/one",
+        stack: "php",
+        isTargetStack: false,
+        independenceGroup: "one",
+        independenceNote: "Independent.",
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function draftActionRequest(
+  cookie: string,
+  request: AuthoringRequest,
+): NextRequest {
+  return new NextRequest("http://localhost/api/authoring/drafts/id", {
+    method: "POST",
+    headers: { cookie },
+    body: JSON.stringify({ request }),
+  });
+}
 
 function createRepository(sourceRoot: string): void {
   const path = join(sourceRoot, "example", "one");
@@ -53,9 +95,12 @@ function createRepository(sourceRoot: string): void {
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "uptake-authoring-route-"));
   const sourceRoot = join(root, "sources");
+  catalogDir = join(root, "catalog");
   mkdirSync(sourceRoot);
+  mkdirSync(catalogDir);
   createRepository(sourceRoot);
   process.env.UPTAKE_SOURCE_ROOT = sourceRoot;
+  process.env.UPTAKE_CATALOG_DIR = catalogDir;
   __resetAuthoringStoreForTests();
 });
 
@@ -63,6 +108,7 @@ afterEach(() => {
   __setAuthoringProposerForTests(undefined);
   vi.mocked(createAnthropicProposerFromEnv).mockReset();
   delete process.env.UPTAKE_SOURCE_ROOT;
+  delete process.env.UPTAKE_CATALOG_DIR;
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -220,6 +266,7 @@ describe("authoring route boundary", () => {
       new NextRequest("http://localhost/api/authoring/drafts/id/approve", {
         method: "POST",
         headers: { cookie: "uptake-session=other-session" },
+        body: JSON.stringify({ request: authoringRequest() }),
       }),
       { params: Promise.resolve({ draftId: "unknown" }) },
     );
@@ -227,6 +274,31 @@ describe("authoring route boundary", () => {
     expect(await response.json()).toMatchObject({
       status: "draft-not-found",
     });
+  });
+
+  it.each([
+    ["approve", approveDraft],
+    ["register", registerDraft],
+  ])("requires an exact request body for %s", async (_name, handler) => {
+    const context = { params: Promise.resolve({ draftId: "unknown" }) };
+    for (const body of [
+      undefined,
+      {},
+      { request: authoringRequest(), extra: true },
+      { request: { ...authoringRequest(), intent: "" } },
+    ]) {
+      const response = await handler(
+        new NextRequest("http://localhost/api/authoring/drafts/id", {
+          method: "POST",
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        }),
+        context,
+      );
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        status: "invalid-request",
+      });
+    }
   });
 
   it("rejects a session-owned pending draft and blocks later approval and registration", async () => {
@@ -269,10 +341,13 @@ describe("authoring route boundary", () => {
     if (created.status !== "drafted") return;
     const context = { params: Promise.resolve({ draftId: created.draftId }) };
     const request = () =>
-      new NextRequest("http://localhost/api/authoring/drafts/id", {
-        method: "POST",
-        headers: { cookie: "uptake-session=session-one" },
-      });
+      draftActionRequest(
+        "uptake-session=session-one",
+        authoringRequest({
+          patternId: "rejected-method",
+          name: "Rejected method",
+        }),
+      );
 
     const rejected = await rejectDraft(request(), context);
     expect(rejected.status).toBe(200);
@@ -341,11 +416,117 @@ describe("authoring route boundary", () => {
       params: Promise.resolve({ draftId: firstResult.draftId as string }),
     };
     const oldDraftRequest = () =>
-      new NextRequest("http://localhost/api/authoring/drafts/id", {
-        method: "POST",
-        headers: { cookie: cookie ?? "" },
-      });
+      draftActionRequest(
+        cookie ?? "",
+        authoringRequest({ patternId: "first-method" }),
+      );
     expect((await approveDraft(oldDraftRequest(), context)).status).toBe(404);
     expect((await registerDraft(oldDraftRequest(), context)).status).toBe(400);
+  });
+
+  it("rejects stale input without a replacement draft POST and preserves the catalog", async () => {
+    __setAuthoringProposerForTests(
+      createStubProposer({
+        fileCandidates: ({ sourceId }) => [
+          {
+            sourceId,
+            path: "method.md",
+            roleId: "method",
+            rationale: "fixture",
+          },
+        ],
+        contrast: {
+          roles: [{ id: "method", description: "Observed method." }],
+          bindingPoints: [],
+        },
+      }),
+    );
+    const original = authoringRequest();
+    const changed = authoringRequest({ intent: "Changed current input" });
+    const createdResponse = await createDraft(
+      new NextRequest("http://localhost/api/authoring/drafts", {
+        method: "POST",
+        body: JSON.stringify(original),
+      }),
+    );
+    const created = await createdResponse.json();
+    const cookie = createdResponse.headers.get("set-cookie") ?? "";
+    const context = {
+      params: Promise.resolve({ draftId: created.draftId as string }),
+    };
+
+    const staleApproval = await approveDraft(
+      draftActionRequest(cookie, changed),
+      context,
+    );
+    expect(staleApproval.status).toBe(400);
+    expect(await staleApproval.json()).toMatchObject({
+      status: "stale-input",
+    });
+
+    const before = readdirSync(catalogDir);
+    const staleRegistration = await registerDraft(
+      draftActionRequest(cookie, changed),
+      context,
+    );
+    expect(staleRegistration.status).toBe(400);
+    expect(await staleRegistration.json()).toMatchObject({
+      status: "stale-input",
+    });
+    expect(readdirSync(catalogDir)).toEqual(before);
+
+    const approval = await approveDraft(
+      draftActionRequest(cookie, original),
+      context,
+    );
+    expect(approval.status).toBe(200);
+    expect(await approval.json()).toEqual({ status: "approved" });
+  });
+
+  it("treats source order changes as stale input", async () => {
+    __setAuthoringProposerForTests(
+      createStubProposer({
+        fileCandidates: ({ sourceId }) => [
+          {
+            sourceId,
+            path: "method.md",
+            roleId: "method",
+            rationale: "fixture",
+          },
+        ],
+        contrast: {
+          roles: [{ id: "method", description: "Observed method." }],
+          bindingPoints: [],
+        },
+      }),
+    );
+    const secondSource = {
+      ...authoringRequest().sources[0],
+      id: "two",
+      independenceGroup: "two",
+    };
+    const original = authoringRequest({
+      evidenceStatus: "corroborated",
+      sources: [authoringRequest().sources[0], secondSource],
+    });
+    const createdResponse = await createDraft(
+      new NextRequest("http://localhost/api/authoring/drafts", {
+        method: "POST",
+        body: JSON.stringify(original),
+      }),
+    );
+    const created = await createdResponse.json();
+    const context = {
+      params: Promise.resolve({ draftId: created.draftId as string }),
+    };
+    const response = await approveDraft(
+      draftActionRequest(
+        createdResponse.headers.get("set-cookie") ?? "",
+        { ...original, sources: [...original.sources].reverse() },
+      ),
+      context,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ status: "stale-input" });
   });
 });
