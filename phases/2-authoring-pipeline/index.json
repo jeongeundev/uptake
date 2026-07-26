@@ -23,7 +23,8 @@
       "name": "source-extract",
       "status": "completed",
       "started_at": "2026-07-26T16:01:50+0900",
-      "summary": "고정 HEAD에서 파일 후보를 수집하고 resolve 가능한 provenance만 채택하는 결정적 EXTRACT 엔진을 추가"
+      "summary": "고정 HEAD에서 파일 후보를 수집하고 resolve 가능한 provenance만 채택하는 결정적 EXTRACT 엔진을 추가",
+      "completed_at": "2026-07-26T16:08:57+0900"
     },
     {
       "step": 3,
