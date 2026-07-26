@@ -157,6 +157,8 @@ execute.py가 자동으로 처리하는 것:
 
 ### F. 구현 결과 검토 (Claude 자기점검)
 
+먼저 phase가 실제로 닫혔는지 확인한다 — `phases/{task-name}/index.json`의 phase 레벨 `completed_at`과 `phases/index.json`의 `status: "completed"`가 둘 다 있어야 한다. 실행이 중간에 끊겨 누락됐으면 `python3 scripts/execute.py {task-name} --current-branch`를 다시 돌려 마감시킨다(pending step이 없으면 마감만 수행한다). 이 마감이 `/remediate` 개시 전제조건(계약 §2.1 P1·P2)이다.
+
 Phase가 completed로 끝나면 Claude가 구현 결과를 **한 번** 검토한다. 이것은 구현자 측 **자기점검**이지 독립 리뷰가 아니다 — 깊은 적대적 리뷰는 `/remediate` 입구의 **독립 Codex 리뷰**가 맡는다. 둘을 겹치지 마라.
 
 점검 항목:

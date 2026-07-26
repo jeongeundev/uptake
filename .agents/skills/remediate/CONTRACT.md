@@ -69,7 +69,23 @@ phases/{loop-id}-fix-c1/       # 실제 수정 = execute.py --current-branch가 
 phases/{loop-id}-fix-c2/
 ```
 
-`loop-id`는 remediation 대상 구현을 가리킨다(예: `0-mvp`).
+`loop-id`는 remediation 대상 구현 **phase**를 가리킨다(예: `0-mvp`, `2-authoring-pipeline`).
+
+## 2.1 루프 개시 전제조건
+
+루프를 열기 전에 아래를 모두 확인한다. 하나라도 어긋나면 **루프를 열지 말고 사용자에게 보고한다.**
+
+- **P1** 대상 phase의 `phases/{phase}/index.json`에서 모든 step이 `completed`이고 phase 레벨 `completed_at`이 기록돼 있다.
+- **P2** `phases/index.json`의 해당 phase가 `completed`다.
+- **P3** `remediation/{loop-id}/`가 아직 없다.
+
+- **step 단위 loop-id를 만들지 않는다.** `{phase}-step-N` 형태는 금지다.
+- **`/harness`의 step 실행 도중에 루프를 열지 않는다.** step별 자기점검은 `/harness`의 몫이고,
+  독립 리뷰는 phase 종료 후 **1회** 돈다.
+
+구현이 끝나지 않은 코드를 리뷰하면 findings 0건 Ready가 나와 phase 이름을 무효하게 소진한다.
+그러면 정작 완료 후의 리뷰가 `-final` 같은 접미사를 써야 하고 fix phase 경로까지 갈라진다
+(실제 사고 기록: [`remediation/README.md`](../../../remediation/README.md)).
 
 ## 3. review 아티팩트 스키마 (reviewer agent 생성 또는 사용자 입력)
 

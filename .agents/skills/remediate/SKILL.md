@@ -14,6 +14,7 @@ description: uptake 저장소의 구현 브랜치 또는 기존 Codex 리뷰 결
 
 입력이 JSON 리뷰 파일이면 그 파일을 사용한다. 입력이 branch/phase이면 다음 순서로 리뷰를 자동 생성한다.
 
+0. 계약 §2.1의 개시 전제조건(P1~P3)을 확인한다. 대상 phase가 `completed`가 아니거나 같은 `loop-id`의 루프가 이미 있으면 **루프를 열지 말고 사용자에게 보고한다.** step 단위 loop-id는 만들지 않는다.
 1. exact branch가 있으면 그것을 target branch로 쓴다. 없고 `feat-<입력>`이 있으면 그것을 쓴다. 둘 다 없으면 중단한다.
 2. target branch를 checkout한다. 다른 브랜치에 있으면 tracked/untracked 변경이 하나라도 있을 때 중단하여 사용자 변경을 보호한다.
 3. base는 명시값이 없으면 target branch와 `main`의 merge-base로 확정한다. target phase는 `phases/<입력>/` 또는 branch의 `feat-`를 뺀 이름으로 확정한다.
