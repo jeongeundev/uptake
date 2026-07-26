@@ -1,0 +1,13 @@
+{
+  "project": "uptake",
+  "phase": "2-authoring-pipeline-final-fix-c2",
+  "branch": "feat-2-authoring-pipeline",
+  "steps": [
+    {
+      "step": 0,
+      "name": "invalidate-draft-on-input-change",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-07-26T18:12:00+0900"
+}

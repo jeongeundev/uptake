@@ -7,7 +7,7 @@
   },
   "createdAt": "2026-07-26T17:55:16+0900",
   "state": "remediating",
-  "currentCycle": 1,
+  "currentCycle": 2,
   "maxCycles": 2,
   "findings": [
     {
@@ -42,6 +42,14 @@
           "by": "triage",
           "evidence": "src/components/authoring-wizard.tsx의 invalidateReview는 클라이언트 상태만 비우고 src/services/draft-store.ts의 pending 레코드를 폐기하지 않는다. 같은 세션의 approve route는 draftId만으로 해당 레코드를 승인하므로 docs/ARCHITECTURE.md의 입력 변경 시 downstream 서버 상태 폐기 계약 위반이 실재한다.",
           "at": "2026-07-26T17:55:29+0900"
+        },
+        {
+          "cycle": 1,
+          "from": "accepted",
+          "to": "accepted",
+          "by": "closure",
+          "evidence": "still-open: 아직 해결되지 않았다. src/services/draft-store.ts의 무효화는 같은 세션에서 createDraft가 다시 호출될 때만 수행된다. 반면 src/components/authoring-wizard.tsx의 invalidateReview는 입력 변경 시 클라이언트 상태만 지우며 서버의 기존 draftId를 폐기하지 않는다. 따라서 입력을 변경하고 새 초안을 제출하기 전에는 숨겨진 이전 draftId의 직접 approve 요청이 여전히 성공할 수 있다. 새 draft POST 이후의 거절 테스트는 추가됐지만, 원 finding과 docs/ARCHITECTURE.md의 '이전 입력을 바꾸면 downstream 서버측 상태를 폐기' 계약을 충족하지 못한다.",
+          "at": "2026-07-26T18:09:03+0900"
         }
       ]
     },
@@ -52,7 +60,7 @@
       "category": "test_gap",
       "title": "AC-C9의 카탈로그 불변 경로를 브라우저 E2E가 검증하지 않는다",
       "detail": "authoring-pipeline E2E는 유효한 provenance 후보와 resolve 불가 후보를 한 초안에 함께 넣어 폐기 사유를 표시한 뒤, 그 초안을 승인하여 새 카탈로그 파일을 기록한다. Step 9는 resolve 불가 후보를 내는 별도 케이스에서 후보가 초안에 포함되지 않고 provenance-unresolved가 표시되며 카탈로그 파일 수가 전혀 늘지 않는 것을 요구한다. 현재 테스트는 승인 전 일시적인 카탈로그 불변만 확인하므로, unresolved-only 제안이 no-evidence로 중단되고 기록 경로가 열리지 않는 AC-C9 흐름을 브라우저/API 관통 수준에서 증명하지 못한다.",
-      "state": "accepted",
+      "state": "resolved",
       "raisedInReview": "review-1",
       "firstSeenCycle": 1,
       "specRefs": [
@@ -76,9 +84,26 @@
           "by": "triage",
           "evidence": "e2e/authoring-pipeline.spec.ts는 resolve 불가 후보와 유효 후보를 섞은 성공 초안을 최종 등재한다. phases/2-authoring-pipeline/step9.md가 요구한 unresolved-only 제안에서 provenance-unresolved 표시와 카탈로그 파일 수 완전 불변을 검증하는 별도 브라우저 경로가 없다.",
           "at": "2026-07-26T17:55:29+0900"
+        },
+        {
+          "cycle": 1,
+          "from": "accepted",
+          "to": "resolved",
+          "by": "closure",
+          "evidence": "해결되었다. 별도 unresolved-only proposer 스크립트와 브라우저 E2E가 추가되었고, resolve 불가 후보만 제안했을 때 provenance-unresolved가 화면에 표시되며 승인·등재 버튼이 생성되지 않는 것을 확인한다. 테스트는 실행 전후 카탈로그 파일명 목록과 각 파일의 바이트가 동일함도 직접 단언한다. extractEvidence 역시 모든 후보가 폐기된 경우 폐기 사유를 오류 상세에 포함한다.",
+          "at": "2026-07-26T18:09:03+0900"
         }
       ]
     }
   ],
-  "cycles": []
+  "cycles": [
+    {
+      "cycle": 1,
+      "fixPhase": "2-authoring-pipeline-final-fix-c1",
+      "review": null,
+      "closureReview": "review-2",
+      "verdict": null,
+      "reasons": []
+    }
+  ]
 }
