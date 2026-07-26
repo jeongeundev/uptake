@@ -50,7 +50,11 @@ export async function readJson(
 }
 
 export function statusCode(status: string): number {
-  if (status === "workflow-not-found" || status === "pattern-not-found") {
+  if (
+    status === "workflow-not-found" ||
+    status === "pattern-not-found" ||
+    status === "draft-not-found"
+  ) {
     return 404;
   }
   if (
@@ -59,7 +63,13 @@ export function statusCode(status: string): number {
     status === "target-ineligible" ||
     status === "not-prepared" ||
     status === "not-verified" ||
-    status === "not-approved"
+    status === "not-approved" ||
+    status === "source-unresolved" ||
+    status === "no-evidence" ||
+    status === "contrast-failed" ||
+    status === "oracle-not-anchor" ||
+    status === "self-verify-failed" ||
+    status === "register-rejected"
   ) {
     return 400;
   }
