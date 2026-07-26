@@ -1,0 +1,47 @@
+{
+  "loopId": "2-fix",
+  "target": {
+    "phase": "2-fix",
+    "branch": "feat-2-authoring-pipeline",
+    "baseCommit": "3b9f4d48a01ea39e1addc8066086335e352743c8"
+  },
+  "createdAt": "2026-07-26T19:49:20+0900",
+  "state": "remediating",
+  "currentCycle": 1,
+  "maxCycles": 2,
+  "findings": [
+    {
+      "id": "F-001",
+      "fingerprint": "eade3e3e38ce",
+      "severity": "minor",
+      "category": "contract_violation",
+      "title": "Playwright 실행 결과 파일이 소스 트리에 추적됨",
+      "detail": "`test-results/.last-run.json`은 Playwright가 E2E 실행 때 갱신하는 생성 결과인데 커밋되어 있고 `.gitignore`에도 `test-results/`가 없다. 특히 E2E 실패 시 이 파일의 status와 failedTests가 바뀌어 작업 트리에 제품 변경과 무관한 수정이 남으며, 깨끗한 worktree를 전제로 하는 후속 phase/remediation 실행을 방해할 수 있다. 이는 요청에 직접 필요한 줄만 변경하라는 AGENTS.md의 외과적 변경 규칙에도 어긋난다.",
+      "state": "accepted",
+      "raisedInReview": "review-1",
+      "firstSeenCycle": 1,
+      "specRefs": [
+        "AGENTS.md §3 외과적 변경"
+      ],
+      "evidenceFiles": [
+        "test-results/.last-run.json",
+        ".gitignore"
+      ],
+      "suggestedCategory": null,
+      "canonicalId": null,
+      "routedTo": null,
+      "remediationStep": null,
+      "history": [
+        {
+          "cycle": 1,
+          "from": "unresolved",
+          "to": "accepted",
+          "by": "triage",
+          "evidence": "test-results/.last-run.json은 base..HEAD에서 새로 추가된 Playwright 생성 산출물이고 .gitignore에는 test-results/ 규칙이 없다. E2E 결과가 제품 변경과 무관하게 추적 상태를 바꾸므로 AGENTS.md §3의 외과적 변경 계약 위반이 실재한다.",
+          "at": "2026-07-26T19:49:34+0900"
+        }
+      ]
+    }
+  ],
+  "cycles": []
+}
