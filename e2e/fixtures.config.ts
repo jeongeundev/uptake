@@ -15,6 +15,7 @@ type FixtureState = {
   targetRoot: string;
   authoringTargetRoot: string;
   proposerStubScript: string;
+  unresolvedProposerStubScript: string;
 };
 
 const sourceFiles = [
@@ -67,6 +68,10 @@ export function createE2EFixtures(): FixtureState {
   const targetRoot = resolve(root, "target-js-vitest");
   const authoringTargetRoot = resolve(root, "authoring-target-js-vitest");
   const proposerStubScript = resolve(root, "proposer-stub.json");
+  const unresolvedProposerStubScript = resolve(
+    root,
+    "proposer-stub-unresolved.json",
+  );
   const sources = [
     {
       id: "python-one",
@@ -182,6 +187,23 @@ export function createE2EFixtures(): FixtureState {
       },
     }),
   );
+  writeFileSync(
+    unresolvedProposerStubScript,
+    JSON.stringify({
+      metadata: {
+        providerId: "stub",
+        modelId: "authoring-e2e-unresolved",
+      },
+      fileCandidates: [
+        {
+          sourceId: "source-1",
+          path: "missing/provenance.md",
+          roleId: "method",
+          rationale: "Unresolved-only candidate for AC-C9.",
+        },
+      ],
+    }),
+  );
 
   return {
     root,
@@ -190,5 +212,6 @@ export function createE2EFixtures(): FixtureState {
     targetRoot,
     authoringTargetRoot,
     proposerStubScript,
+    unresolvedProposerStubScript,
   };
 }

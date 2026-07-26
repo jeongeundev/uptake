@@ -281,4 +281,71 @@ describe("authoring route boundary", () => {
     expect((await approveDraft(request(), context)).status).toBe(404);
     expect((await registerDraft(request(), context)).status).toBe(400);
   });
+
+  it("blocks direct approval and registration of a prior draft after a new draft POST", async () => {
+    __setAuthoringProposerForTests(
+      createStubProposer({
+        fileCandidates: ({ sourceId }) => [
+          {
+            sourceId,
+            path: "method.md",
+            roleId: "method",
+            rationale: "fixture",
+          },
+        ],
+        contrast: {
+          roles: [{ id: "method", description: "Observed method." }],
+          bindingPoints: [],
+        },
+      }),
+    );
+    const body = (patternId: string) =>
+      JSON.stringify({
+        patternId,
+        name: "Method",
+        intent: "Observe method",
+        capability: "descriptive",
+        evidenceStatus: "observed",
+        sources: [
+          {
+            id: "one",
+            repository: "example/one",
+            stack: "php",
+            isTargetStack: false,
+            independenceGroup: "one",
+            independenceNote: "Independent.",
+          },
+        ],
+      });
+    const first = await createDraft(
+      new NextRequest("http://localhost/api/authoring/drafts", {
+        method: "POST",
+        body: body("first-method"),
+      }),
+    );
+    const firstResult = await first.json();
+    const cookie = first.headers.get("set-cookie");
+    expect(firstResult.status).toBe("drafted");
+    expect(cookie).toBeTruthy();
+
+    const second = await createDraft(
+      new NextRequest("http://localhost/api/authoring/drafts", {
+        method: "POST",
+        headers: { cookie: cookie ?? "" },
+        body: body("second-method"),
+      }),
+    );
+    expect(second.status).toBe(200);
+
+    const context = {
+      params: Promise.resolve({ draftId: firstResult.draftId as string }),
+    };
+    const oldDraftRequest = () =>
+      new NextRequest("http://localhost/api/authoring/drafts/id", {
+        method: "POST",
+        headers: { cookie: cookie ?? "" },
+      });
+    expect((await approveDraft(oldDraftRequest(), context)).status).toBe(404);
+    expect((await registerDraft(oldDraftRequest(), context)).status).toBe(400);
+  });
 });

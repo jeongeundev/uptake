@@ -210,4 +210,53 @@ describe("authoring store", () => {
       registerAuthoringDraft("session-one", created.draftId),
     ).toMatchObject({ status: "not-approved" });
   });
+
+  it("invalidates a prior pending or approved draft when the same session creates another", async () => {
+    const pending = await createAuthoringDraft(
+      "session-one",
+      request({ patternId: "pending-method" }),
+      proposer(),
+    );
+    expect(pending.status).toBe("drafted");
+    if (pending.status !== "drafted") return;
+
+    const approved = await createAuthoringDraft(
+      "session-one",
+      request({ patternId: "approved-method" }),
+      proposer(),
+    );
+    expect(approved.status).toBe("drafted");
+    if (approved.status !== "drafted") return;
+    expect(
+      approveAuthoringDraft("session-one", approved.draftId),
+    ).toEqual({ status: "approved" });
+
+    const otherSession = await createAuthoringDraft(
+      "session-two",
+      request({ patternId: "other-method" }),
+      proposer(),
+    );
+    expect(otherSession.status).toBe("drafted");
+    if (otherSession.status !== "drafted") return;
+
+    const replacement = await createAuthoringDraft(
+      "session-one",
+      request({ patternId: "replacement-method" }),
+      proposer(),
+    );
+    expect(replacement.status).toBe("drafted");
+
+    expect(
+      approveAuthoringDraft("session-one", pending.draftId),
+    ).toMatchObject({ status: "draft-not-found" });
+    expect(
+      registerAuthoringDraft("session-one", pending.draftId),
+    ).toMatchObject({ status: "not-approved" });
+    expect(
+      registerAuthoringDraft("session-one", approved.draftId),
+    ).toMatchObject({ status: "not-approved" });
+    expect(
+      approveAuthoringDraft("session-two", otherSession.draftId),
+    ).toEqual({ status: "approved" });
+  });
 });

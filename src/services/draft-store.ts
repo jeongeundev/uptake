@@ -17,6 +17,14 @@ function copyDraft(draft: StoredDraft): StoredDraft {
 }
 
 export function createDraft(input: Omit<StoredDraft, "status">): string {
+  for (const draft of drafts.values()) {
+    if (
+      draft.sessionId === input.sessionId &&
+      (draft.status === "pending" || draft.status === "approved")
+    ) {
+      draft.status = "rejected";
+    }
+  }
   const draftId = randomUUID();
   drafts.set(draftId, copyDraft({ ...input, status: "pending" }));
   return draftId;

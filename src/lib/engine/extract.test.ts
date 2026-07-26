@@ -164,6 +164,31 @@ describe("extractEvidence", () => {
     });
   });
 
+  it("reports provenance-unresolved when every proposed path is discarded", async () => {
+    const sourceRoot = createSourceRoot();
+    createRepository(sourceRoot, "github.com/example/source", {
+      "method.md": "observed method\n",
+    });
+    const proposer = createStubProposer({
+      fileCandidates: [
+        {
+          sourceId: "source-one",
+          path: "invented.md",
+          roleId: "spec-artifact",
+          rationale: "Hallucinated evidence.",
+        },
+      ],
+    });
+
+    await expect(
+      extractEvidence(request(), proposer, sourceRoot),
+    ).resolves.toMatchObject({
+      ok: false,
+      reason: "no-evidence",
+      detail: expect.stringContaining("provenance-unresolved"),
+    });
+  });
+
   it("discards parent and absolute paths before provenance resolution", async () => {
     const sourceRoot = createSourceRoot();
     createRepository(sourceRoot, "github.com/example/source", {

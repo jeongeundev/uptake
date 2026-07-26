@@ -8,7 +8,7 @@
     "eval:proposer": "tsx evals/proposer.eval.mts",
     "lint": "eslint",
     "test": "vitest run --passWithNoTests",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test && playwright test --config playwright.unresolved.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

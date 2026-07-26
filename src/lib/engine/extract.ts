@@ -222,10 +222,13 @@ export async function extractEvidence(
   }
 
   if (evidence.length === 0) {
+    const reasons = [...new Set(discarded.map((candidate) => candidate.reason))]
+      .sort()
+      .join(", ");
     return {
       ok: false,
       reason: "no-evidence",
-      detail: "No proposed file candidate resolved to evidence.",
+      detail: `No proposed file candidate resolved to evidence. Discarded reasons: ${reasons}.`,
     };
   }
 

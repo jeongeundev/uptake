@@ -79,6 +79,32 @@ describe("draft store", () => {
     });
   });
 
+  it("invalidates prior active drafts only in the same session", () => {
+    const pendingId = createDraft(input);
+    const approvedId = createDraft(input);
+    expect(approveDraft(approvedId, input.sessionId)).toEqual({ ok: true });
+    const otherSessionId = createDraft({
+      ...input,
+      sessionId: "session-two",
+    });
+
+    createDraft(input);
+
+    expect(approveDraft(pendingId, input.sessionId)).toEqual({
+      ok: false,
+      reason: "invalid-state",
+    });
+    expect(consumeApprovedDraft(pendingId, input.sessionId)).toEqual({
+      ok: false,
+      reason: "not-approved",
+    });
+    expect(consumeApprovedDraft(approvedId, input.sessionId)).toEqual({
+      ok: false,
+      reason: "not-approved",
+    });
+    expect(approveDraft(otherSessionId, "session-two")).toEqual({ ok: true });
+  });
+
   it("rejects only a pending draft and prevents later approval or consumption", () => {
     const draftId = createDraft(input);
 
