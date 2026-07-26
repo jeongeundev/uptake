@@ -13,7 +13,10 @@
     {
       "step": 1,
       "name": "instantiate-role-shape",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-26T15:57:34+0900",
+      "summary": "instantiate 템플릿 매칭을 patternId 하드코딩에서 정확한 앵커 역할 형태와 oracle target 검사로 전환",
+      "completed_at": "2026-07-26T15:59:12+0900"
     },
     {
       "step": 2,
