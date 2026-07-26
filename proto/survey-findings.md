@@ -170,6 +170,106 @@ README의 명시적 설명 유무, 기본값 대비 커스터마이징 흔적.
 
 ---
 
+# 3차 — 낯선 대형 OSS (pytest)
+
+## 질문
+
+1·2차 대상은 모두 사람이 아는 저장소였다. **낯선 대형 OSS에서도 되는가?** 그리고 유명 저장소일수록
+모델이 재료 대신 **사전 지식**으로 답할 위험이 있다 — 그것을 배제할 수 있는가?
+
+## 조건
+
+- 대상: `pytest-dev/pytest` (652 파일, shallow clone)
+- 투입: 76개 파일 / 227.7KB / ≈67K 토큰
+- 프롬프트에 사전 지식 사용을 명시적으로 금지
+- 수행: 별도 fresh 에이전트
+
+## 실행 전에 드러난 수집 결함 2건
+
+| 결함 | 증상 | 조치 |
+|---|---|---|
+| **생태계 편향** | 문서 규칙이 `.md`만 봐서 `CONTRIBUTING.rst`와 `doc/` 129개를 통째로 누락. `agent-instructions` 0개, `design-docs` 0개 | `.rst`/`.txt` 추가 |
+| **규모 대응** | 문서 129개가 예산 220KB를 독식해 `hooks`·`task-runner`·`test-config`가 전멸. 하필 잘린 것이 `.pre-commit-config.yaml`과 `tox.ini` | 카테고리별 라운드로빈(`interleaveByRule`) + 예산 초과 시 `continue` |
+
+수정 후 7개 카테고리 전부 생존. uptake 재수집은 28파일 146.3KB로 1차와 동일해 재현성을 유지했다.
+
+## 판정
+
+| 축 | 결과 |
+|---|---|
+| provenance | evidence **87/87 resolve**, 환각 0건 |
+| precision | 대조한 주장 전부 정확 (아래) |
+| 후보 수 | **13건** — 재료 규모에 비례 |
+| confidence | high 12 / medium 1 |
+| 해상도 | `discipline` 평균 **1392자** — 3회 중 최고 |
+
+capability는 generative 11 / descriptive 2.
+
+주장 대조 (사람이 파일을 열어 확인):
+
+| 주장 | 실제 |
+|---|---|
+| `py-path-deprecated`의 exclude 4항목 | `.pre-commit-config.yaml:166` 문자 단위 일치 |
+| `language: pygrep` 로컬 훅 2개 | `:148`, `:164` |
+| ruff `per-file-ignores`로 vendored 트리 예외 | `pyproject.toml:185` |
+| CONTRIBUTING의 AI/LLM 정책, "will be closed" | `:187`, `:213-215` 정확히 인용 |
+| `release.py`가 `Co-authored-by` 수집, `[bot]` 제외 | `:30`, `:41` — `if not name.endswith("[bot]") and name != "pytest bot"` 그대로 |
+
+## 사전 지식 오염은 배제된다
+
+가장 특이한 후보 `human-accountability-for-contributions`의 근거는 pytest의 **AI/LLM 기여 정책**이다.
+최근 추가된 문서이고, 본문의 "clankers"(무인 에이전트 산출물을 부르는 은어) 같은 표현은 모델 기억에
+있을 만한 것이 아니다. 재료에서 직접 읽었다는 증거다.
+
+자기 반증도 유지됐다 — "zizmor가 강제하는 규칙셋은 제시된 파일에 없어 확인 불가, 워크플로의
+균일성이 직접 증거일 뿐" / "quarantine된 파일 자체는 제시되지 않아 내용을 확인할 수 없고 그것을
+지목하는 훅만 보인다".
+
+## 상속 문제는 성숙도에 반비례한다
+
+2차(tech-blog)는 4건 중 3건이 템플릿 상속이었다. pytest 13건은 **전부 자생**이다 — changelog
+fragment, tox 단일 인터페이스, pygrep 격리, 플러그인 역의존성 테스트 모두 그 프로젝트가 겪은
+문제에서 나온 것이다. "자생 vs 상속" 축은 여전히 필요하지만, 성숙한 OSS에서는 덜 심각하다.
+
+---
+
+# 세 실험 종합
+
+| | uptake | tech-blog | pytest |
+|---|---|---|---|
+| 재료 | 28파일 / 43K tok | 7파일 / 2.8K tok | 76파일 / 67K tok |
+| 후보 | 9건 | 4건 | 13건 |
+| provenance | 60/60 | 12/12 | 87/87 |
+| 환각 | 0건 | 0건 | 0건 |
+| confidence | h6 m3 | h1 m1 l2 | h12 m1 |
+| `discipline` 평균 | 849자 | — | 1392자 |
+| 자생/상속 | 자생 | 1/4 자생 | 전부 자생 |
+
+**후보 수는 재료 규모에, confidence는 재료 품질에 비례한다. 환각은 세 번 모두 0건이다.**
+세 번 모두 확신이 부족한 지점에 자기 반증을 붙였다.
+
+**가정은 확정한다** — 규모·성숙도·언어가 다른 세 저장소에서 일관된 결과가 나왔다.
+
+## 가장 중요한 결론: 병목은 LLM이 아니라 수집 규칙이다
+
+세 실험에서 발견된 결함은 전부 수집 규칙에 있었다:
+
+| 실험 | 결함 | 놓친 것 |
+|---|---|---|
+| 1차 | `automation` 규칙 부재 | `execute.py`·`remediate.py` — 최종 후보 9건 중 5건의 근거 |
+| 3차 | `.md`만 인식 | `CONTRIBUTING.rst`, `doc/` 전체 |
+| 3차 | 카테고리 예산 독식 | `.pre-commit-config.yaml`, `tox.ini` |
+
+세 번 다 규칙을 고치자 결과가 살아났다. **수집 규칙이 SURVEY의 성능 상한이며, 코드에 박을 것이
+아니라 생태계별로 확장 가능한 데이터여야 한다.**
+
+## 남은 미검증
+
+- 각 대상 1회씩. 재현·변동폭 미측정
+- recall은 1차에서만 측정 가능했다(정답지가 있는 유일한 대상)
+- 상속 구분 신호(git 히스토리 등)는 아이디어일 뿐 미검증
+- 모노레포, 문서가 위키에만 있는 저장소, 비영어권 저장소 미검증
+
 ## phase 3에 넘길 것
 
 - `SIGNAL_RULES` + `EXCLUDE` — 7 카테고리 결정적 수집 규칙. 그대로 승격 후보

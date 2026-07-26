@@ -1,0 +1,208 @@
+{
+  "candidates": [
+    {
+      "id": "changelog-fragment-per-change",
+      "intent": "Every user-visible change ships its own release-note fragment, so the changelog and the next version number are derived from the work rather than hand-written at release time.",
+      "discipline": "A change adds a file under `changelog/` named `<number>.<category>[.<n>][.rst]` where category is one of breaking|deprecation|feature|improvement|bugfix|vendor|doc|packaging|contrib|misc. The local pre-commit hook `changelogs-rst` uses `language: fail` with an inverted `exclude` regex, so ANY file under `changelog/` that does not match that pattern aborts the commit; only `.gitignore`, `README.rst` and `_template.rst` are exempt. A second pygrep hook `changelogs-user-role` rejects a malformed `:user:` credit role in those fragments. At release time `scripts/release.py` folds the fragments in with `towncrier build --yes --version <v>`, and `scripts/prepare-release-pr.py` derives the version bump from them: it globs `changelog/*.feature.rst` and `changelog/*.breaking.rst` and sets `is_feature_release` from their presence, which selects both the announcement template and whether the minor or patch component is incremented. Mislabeling a fragment therefore silently changes the released version number. Caveat: the `changelog/` directory itself is not among the files shown; its existence and contents are inferred from the hook's exclude regex and the release scripts' globs.",
+      "evidence": [
+        ".pre-commit-config.yaml",
+        "scripts/release.py",
+        "scripts/prepare-release-pr.py",
+        "tox.ini"
+      ],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "tox-as-sole-task-interface",
+      "intent": "Every automated task has exactly one definition — a tox environment — so CI, release scripts and a contributor's laptop all run the identical command.",
+      "discipline": "`tox.ini` defines an environment for every task the project performs: the test matrix (py310-py315, pypy3, plus feature axes pexpect/xdist/twisted24/twisted25/asynctest/numpy/pluggymain/pylib/freeze/coverage/nobyte/lsof), `linting`, `docs`, `docs-checklinks`, `regen`, `plugins`, `release`, `prepare-release-pr`, `generate-gh-release-notes`, `update-plugin-list`. Every GitHub workflow step is a tox setup action followed by a single `tox -e <env>`; no workflow inlines pip installs, pytest invocations or lint commands. The release automation obeys the same rule from the other direction: `scripts/release.py` shells out to `tox -e regen` and `tox -e docs-checklinks` instead of importing those tools, and `scripts/prepare-release-pr.py` invokes `tox -e release` with an in-code comment stating tox is required there precisely because the checkout has switched branches and dependencies may differ. CONTRIBUTING.rst tells documentation contributors to run `tox -e docs`. Variation is expressed as tox factors and `_PYTEST_TOX_*` environment variables rather than as branching in YAML. Note this is a discipline about having a single task surface, not merely the choice of tox as a dependency.",
+      "evidence": [
+        "tox.ini",
+        ".github/workflows/test.yml",
+        ".github/workflows/deploy.yml",
+        ".github/workflows/prepare-release-pr.yml",
+        ".github/workflows/update-plugin-list.yml",
+        ".github/workflows/doc-check-links.yml",
+        "scripts/release.py",
+        "scripts/prepare-release-pr.py",
+        "CONTRIBUTING.rst"
+      ],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "push-button-release-tag-after-publish",
+      "intent": "Cutting a release is two manual workflow dispatches and no local commands, with the git tag created only after the artifact is actually on PyPI.",
+      "discipline": "`prepare-release-pr.yml` (workflow_dispatch inputs: branch, major yes/no, prerelease) runs `scripts/prepare-release-pr.py`, which computes the next version by parsing `git tag`, creates a `release-<version>` branch off the given base branch, and runs the whole pre-release sequence through `scripts/release.py`: generate the announcement, `tox -e regen`, towncrier build, `pre-commit run --all-files`, sphinx linkcheck, then one commit `Prepare release version <v>`. It force-pushes that branch and opens a DRAFT pull request whose body instructs maintainers to wait for green builds and approval, then dispatch `deploy.yml` with the same version. `deploy.yml` orders jobs so publication cannot outrun its paperwork: package -> generate-gh-release-notes -> publish-to-pypi -> push-tag -> create-github-release, with an inline comment stating the notes job is a dependency purely for ordering because they do not want to publish if note generation fails. Publishing is fenced by `if: github.repository == 'pytest-dev/pytest'` and the protected `environment: deploy`, and uses OIDC (`id-token: write`, attestations) rather than a stored token. Version strings are never edited by hand: `pyproject.toml` declares `dynamic = [\"version\"]` with setuptools-scm writing `src/_pytest/_version.py`, and both the workflows and `[pkgenv]` in tox pass `SETUPTOOLS_SCM_PRETEND_VERSION_FOR_PYTEST`. The announcement file and its contributor credit list are generated by `scripts/release.py` from `git log` author names plus `Co-authored-by` trailers over the range since the last tag, filtering out names ending in `[bot]` and `pytest bot`, and the new entry is spliced into `doc/en/announce/index.rst`. GitHub Release notes are extracted from the changelog by regex on version headings and converted RST->Markdown via pandoc.",
+      "evidence": [
+        ".github/workflows/prepare-release-pr.yml",
+        ".github/workflows/deploy.yml",
+        "scripts/prepare-release-pr.py",
+        "scripts/release.py",
+        "scripts/generate-gh-release-notes.py",
+        "pyproject.toml",
+        "tox.ini",
+        "doc/en/announce/index.rst",
+        "doc/en/announce/release-9.1.1.rst"
+      ],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "pre-commit-as-blocking-lint-gate",
+      "intent": "All style, formatting and static-analysis rules are executable and run at commit time, so human review never spends attention on them.",
+      "discipline": "`.pre-commit-config.yaml` pins every hook to an exact rev and requires `minimum_pre_commit_version: 4.4.0`. The same config IS the CI lint job — `tox -e linting` runs `pre-commit run --all-files --show-diff-on-failure` with `skip_install = True` — and README.rst carries a pre-commit.ci badge, so the hook set runs on every pull request whether or not the contributor installed the hooks locally. Hooks prefer rewriting over complaining: `ruff-check --fix`, `ruff-format`, `zizmor --fix`, trailing-whitespace, end-of-file-fixer, pyproject-fmt, and blacken-docs which formats Python code blocks embedded in documentation. Type checking is part of the same gate and is path-scoped: mypy over `^(src/|testing/|scripts/)` with its own pinned `additional_dependencies` list, plus `python-use-type-annotations` which forbids type comments. Ruff's isort settings make `from __future__ import annotations` a required import in every module (reinforced by rule FA100) — visible in every Python file shown, down to four-line example conftests — and enforce one import per line, sorting within sections, and two blank lines after imports. `rst-lint` is applied to the top-level RST documents.",
+      "evidence": [
+        ".pre-commit-config.yaml",
+        "tox.ini",
+        "pyproject.toml",
+        "README.rst",
+        "doc/en/conftest.py",
+        "doc/en/example/conftest.py",
+        "testing/example_scripts/config/collect_pytest_prefix/conftest.py",
+        "testing/freeze/tox_run.py",
+        "src/_pytest/pytester_assertions.py"
+      ],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "pygrep-quarantine-of-deprecated-apis",
+      "intent": "Once an internal API is deprecated, reintroducing it anywhere outside a named quarantine is made mechanically impossible rather than merely discouraged.",
+      "discipline": "Two local `language: pygrep` pre-commit hooks act as bans on source text. `py-deprecated` fails any Python file containing `py._code.`, `py.builtin.`, `py.code.`, `py.io.`, `py.path.local.sysfind`, `py.process.`, `py.std.`, `py.error.` or `py.xml.`. `py-path-deprecated` fails on `py.path.local` everywhere except an explicit four-item allowlist that exists to host the legacy surface and its tests: `docs`, `src/_pytest/deprecated.py`, `testing/deprecated_test.py`, `src/_pytest/legacypath.py`. The enforcement is at the character level at commit time, and the exclude list doubles as documentation of where legacy support is allowed to live. The same containment idea appears in ruff config, where the vendored `src/_pytest/_py/**` tree is exempted from bugbear and flake8-pyi rules by `per-file-ignores` rather than by relaxing the global rule set. Caveat: the quarantined files themselves are not among the shown files, so their contents cannot be confirmed here — only the hooks that name them.",
+      "evidence": [
+        ".pre-commit-config.yaml",
+        "pyproject.toml"
+      ],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "narrow-waivers-with-inline-reasons",
+      "intent": "Known gaps are recorded at the narrowest possible scope with the reason attached in-band, instead of being papered over by lowering a global bar or deleting the failing check.",
+      "discipline": "Four distinct waiver mechanisms, each carrying its justification next to it. (a) CI matrix entries expected to fail carry `xfail: true` and are made non-blocking by `continue-on-error: ${{ matrix.xfail && true || false }}` — applied to pluggy-main, freeze, several macOS and specific interpreter combinations — so the job keeps running and stays visible instead of being removed. (b) Hooks that do not yet pass are kept configured but demoted to `stages: [manual]` with the reason inline: pyright is manual because `passing pyright is a work in progress`; pyupgrade is manual because `ruff does what pyupgrade does and the two are not out of sync often enough`; pylint is manual with `--fail-on=I`. (c) Typing strictness is set per file by module-level pragmas — `# mypy: disallow-untyped-defs` opts the `scripts/` modules INTO strictness, while `# mypy: allow-untyped-defs` marks not-yet-converted modules (src/_pytest/pytester.py, testing/conftest.py, testing/test_conftest.py, testing/test_pytester.py and several example conftests) — making the conversion backlog readable from the files themselves. (d) Every entry in ruff's `lint.ignore` and `lint.per-file-ignores` carries a one-line rationale (E721 because `pytest can do weird low-level things`; RUF060 for `testing/**` because the pattern is `always voluntary in tests`; F841 for `testing/code/test_source.py` because it `can't be disabled on a line-by-line basis`), and pylint's long `disable` list annotates which entries duplicate a ruff rule.",
+      "evidence": [
+        ".github/workflows/test.yml",
+        ".pre-commit-config.yaml",
+        "pyproject.toml",
+        "scripts/release.py",
+        "scripts/update-plugin-list.py",
+        "scripts/generate-gh-release-notes.py",
+        "src/_pytest/pytester.py",
+        "testing/conftest.py",
+        "testing/test_pytester.py",
+        "testing/test_conftest.py"
+      ],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "ci-tests-the-built-distribution",
+      "intent": "CI validates the artifact users will actually install, across the full declared support matrix, behind exactly one required status check.",
+      "discipline": "`test.yml` builds and inspects the package once in a `package` job, and all 30 matrix jobs then download that artifact and run `tox run -e <env> --installpkg $(find dist/*.tar.gz)` — the suite is never run against the raw working tree — while tox is configured with `package = wheel` / `wheel_build_env = .pkg` so environments share a single build. `deploy.yml` reuses the identical build step, so the released artifact is produced the same way as the tested one. The matrix spans windows/ubuntu/macos x py310-py315 plus pypy, with unittest flavours (twisted24, twisted25, asynctest) split into separate jobs under a comment saying this is done `to ensure proper coverage`. Branch protection is decoupled from the matrix: a do-nothing `check` job with `if: always()` aggregates results via `re-actors/alls-green`, and its comment states it exists `only for the branch protection`, so jobs can be added or renamed without touching repository settings. `concurrency` with `cancel-in-progress` kills superseded runs; pushes to the `test-me-*` branch namespace get the full matrix without opening a PR; and coverage/JUnit uploads use `fail_ci_if_error: false`, i.e. reporting is observability and is deliberately not allowed to gate a build.",
+      "evidence": [
+        ".github/workflows/test.yml",
+        ".github/workflows/deploy.yml",
+        "tox.ini"
+      ],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "plugin-ecosystem-reverse-dependency-testing",
+      "intent": "A change to pytest is not considered safe until it has been run against the third-party plugins and upstream libraries that depend on it.",
+      "discipline": "A dedicated `plugins` tox environment and matching CI matrix job change into `testing/plugins_integration/` and execute a real pytest run under each of a fixed roster of plugins — bdd, cov, django (`--ds=django_settings`), html, rerunfailures (`--reruns 5`), anyio, asyncio, mock, trio, twisted, sugar, flakes — with `pip_pre = true` so pre-release plugin versions are exercised, and `uv pip check` run first so an inconsistent dependency set fails fast. Each plugin has its own minimal integration module, and one of them (`pytest_rerunfailures_integration.py`) is an explicitly labelled regression test for a specific issue. The local `testing/plugins_integration/pytest.ini` raises the bar for that job: `filterwarnings = error::pytest.PytestWarning` turns pytest's own warnings into failures, with only two narrowly-scoped ignores, plus `strict_markers` and a pinned asyncio mode. The same idea is applied upstream and downstream: `py310-pluggymain` installs pluggy from git main and `pylib` installs the legacy `py` library — both marked non-blocking in CI so they act as early warning rather than a gate — and `py310-freeze` verifies that pytest still runs after being bundled by pyinstaller.",
+      "evidence": [
+        "tox.ini",
+        "testing/plugins_integration/pytest.ini",
+        "testing/plugins_integration/pytest_anyio_integration.py",
+        "testing/plugins_integration/pytest_asyncio_integration.py",
+        "testing/plugins_integration/pytest_mock_integration.py",
+        "testing/plugins_integration/pytest_trio_integration.py",
+        "testing/plugins_integration/pytest_twisted_integration.py",
+        "testing/plugins_integration/pytest_rerunfailures_integration.py",
+        "testing/freeze/tox_run.py",
+        ".github/workflows/test.yml"
+      ],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "black-box-self-testing-in-normalized-environment",
+      "intent": "pytest is tested through its own public surface — a real run in a throwaway directory whose observable output is asserted — with the ambient environment forcibly neutralized so those assertions are deterministic on any machine.",
+      "discipline": "Tests take the `pytester` fixture, write temporary test files and conftests, run pytest either in-process or as a subprocess (`--runpytest inprocess|subprocess`), and assert on outcomes and matched output lines (`assert_outcomes`, `fnmatch_lines`, `no_fnmatch_line`, `HookRecorder`) rather than on internals. `src/_pytest/pytester_assertions.py` exists as a separate module solely because pytester is imported by the `pytest` package and therefore cannot itself be subject to assertion rewriting — a structural consequence of testing the tool with itself. `testing/conftest.py` enforces determinism through autouse fixtures: terminal width pinned to 80 because `--help` formatting is asserted; `PY_COLORS`/`NO_COLOR`/`FORCE_COLOR` deleted; the `CI` variable deleted unless a test opts back in with `@pytest.mark.keep_ci_var`; `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` set for every pytester run; tracing restored when running under coverage. Time is faked through `_pytest.timing`/`MockTiming`, with the stated rule that pytest code must always call `_pytest.timing` instead of `time` directly so tests can control the clock. Test cost is classified automatically rather than by hand-labelling: a `pytest_collection_modifyitems` hook wrapper inspects each item's fixtures and its `__code__.co_names`, applies `pytest.mark.slow` / `pytest.mark.uses_pexpect` itself (pytester users are slow; `spawn`/`runpytest_subprocess` users are slowest), and reorders items so fast tests run first — done in a wrapper at the beginning specifically so `--ff` still works. Resource leaks are policed by an opt-in `LsofFdLeakChecker` that diffs open file descriptors around every test, wired to the `lsof` tox factor and one CI job. Compliance here is largely a matter of authoring convention: no oracle can decide that a newly written test 'should have used pytester', even though individual pieces (the --lsof job, the autouse normalization) are mechanical.",
+      "evidence": [
+        "src/_pytest/pytester.py",
+        "src/_pytest/pytester_assertions.py",
+        "testing/conftest.py",
+        "testing/test_pytester.py",
+        "testing/test_conftest.py",
+        "tox.ini",
+        ".github/workflows/test.yml",
+        "testing/example_scripts/pytest.ini"
+      ],
+      "capability": "descriptive",
+      "confidence": "high"
+    },
+    {
+      "id": "documentation-verified-and-regenerated",
+      "intent": "Documentation is treated as a build artifact that must compile clean, whose examples are machine-generated rather than typed, and whose external links are checked on a schedule instead of on the PR path.",
+      "discipline": "`tox -e docs` runs sphinx with `-W --keep-going`, so any warning fails the build, pinned to a specific basepython with a comment to keep it in sync with the readthedocs config. Command output embedded in the docs is not hand-edited: `tox -e regen` drives regendoc with `CI=` and `BUILD_NUMBER=` explicitly cleared, with a comment stating this is done because pytest auto-detects CI and would otherwise leak more verbose output into the example transcripts; `scripts/release.py` runs regen on every release before committing. Docstrings and documentation are executed as tests — the `doctesting` tox environment and CI job run `pytest --doctest-modules --pyargs _pytest` plus the `doc/en` tree — supported by collection carve-outs: `doc/en/conftest.py` ignores `conf.py`, `doc/en/example/conftest.py` ignores example trees not meant to run there, and `doc/en/pytest.ini` exists only to stop the root-level config from applying. Link checking is deliberately kept off the pull-request path: `docs-checklinks` runs weekly on cron plus manual dispatch, and `scripts/release.py` runs it during release prep with a `--skip-check-links` escape hatch used by the release-PR workflow. Because the API reference is autogenerated from docstrings, CONTRIBUTING.rst fixes the docstring convention: Sphinx field syntax (`:param:`, `:returns:`, `:raises:`), `.. versionadded::` directives, proper sentences, and types omitted when annotations are present.",
+      "evidence": [
+        "tox.ini",
+        ".github/workflows/doc-check-links.yml",
+        ".github/workflows/test.yml",
+        "scripts/release.py",
+        "scripts/prepare-release-pr.py",
+        "CONTRIBUTING.rst",
+        "doc/en/conftest.py",
+        "doc/en/example/conftest.py",
+        "doc/en/pytest.ini"
+      ],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "human-accountability-for-contributions",
+      "intent": "Finite volunteer review capacity is protected by requiring an accountable human author who can explain the change, independent of which tools produced it.",
+      "discipline": "CONTRIBUTING.rst states an explicit AI/LLM policy whose line is human effort, not tooling: the submitter must understand the change and be able to engage substantively with review feedback; pull requests entirely generated by agents with no meaningful human review `will be closed`; maintainers state they close and ban on recognized unattended-agent signatures (generic commit prose, confidently-wrong diffs, inability to answer a simple `why`, drive-by PRs against issues the author never engaged with), while inviting false positives to talk to them. Crediting AI tools via `Co-authored-by` trailers is suggested and explicitly not required — and those trailers are load-bearing downstream, since `scripts/release.py` assembles the release announcement's contributor list from `git log` authors plus `Co-authored-by` trailers, excluding names ending in `[bot]` and `pytest bot`. Adjacent process rules in the same document: claim an issue by commenting on it before starting work; bug reports must include OS, interpreter version, pytest version and reproduction steps; and a failing xfail test that demonstrates a bug is welcomed as a standalone contribution even without a fix. Plugin donation to the pytest-dev organisation requires PyPI presence under a `pytest-` prefixed name, a tox config, README, LICENSE, issue tracker and changelog, and is approved socially — `if no contributor strongly objects and two agree`. Enforcement is human judgement during review; no oracle can decide whether a submitter understood their own patch, and the shown files contain no bot, label or workflow implementing this policy, so the claim rests on the policy text itself.",
+      "evidence": [
+        "CONTRIBUTING.rst",
+        "scripts/release.py"
+      ],
+      "capability": "descriptive",
+      "confidence": "high"
+    },
+    {
+      "id": "bot-chores-land-as-draft-prs",
+      "intent": "Recurring maintenance is automated on a schedule, but automated output enters the repository only through a pull request that a human must promote.",
+      "discipline": "`update-plugin-list.yml` runs weekly, regenerates the plugin list through `tox -e update-plugin-list`, and opens a DRAFT pull request authored by `pytest bot`. It then resolves the current maintenance branch with `git ls-remote --heads --sort=v:refname 'refs/heads/*.x'`, failing the run if none matches, attaches a `backport <branch>` label, and posts a comment telling maintainers to mark the PR ready for review — which is exactly what starts CI, because `test.yml`'s pull_request trigger includes `ready_for_review`. A bot therefore cannot consume CI capacity or merge on its own. The generated artifact is self-labelling: `scripts/update-plugin-list.py` writes a header declaring the file autogenerated and warning that the list is neither curated nor endorsed, caches PyPI responses on disk (with a CI cache key), and filters out projects classified `Development Status :: 7 - Inactive`. Issue triage is automated but deliberately narrow: `stale.yml` only touches issues carrying the `status: needs information` label, marks them stale after 14 days and closes after 7 more with explanatory messages, and explicitly disables the same behaviour for pull requests (`days-before-pr-stale: -1`, `days-before-pr-close: -1`). Scheduled workflows are fenced to the upstream organisation with `if: github.repository_owner == 'pytest-dev'` so forks do not run them.",
+      "evidence": [
+        ".github/workflows/update-plugin-list.yml",
+        ".github/workflows/stale.yml",
+        ".github/workflows/doc-check-links.yml",
+        "scripts/update-plugin-list.py",
+        ".github/workflows/test.yml"
+      ],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "least-privilege-pinned-ci-workflows",
+      "intent": "CI configuration is written as untrusted-code-handling infrastructure: no ambient credentials, no ambient permissions, no floating action versions.",
+      "discipline": "Every third-party action is referenced by full 40-character commit SHA with the human-readable version in a trailing comment (checkout, download-artifact, upload-artifact, setup-python, cache, codecov, stale, alls-green, create-pull-request, gh-action-pypi-publish, build-and-inspect-python-package), never by tag or branch. Workflows declare `permissions: {}` at the top and re-grant the minimum per job (`contents: read` for test jobs, `id-token: write` + `attestations: write` only where publishing or attesting, `issues: write` only for the stale bot, `contents: write` only for tag pushing and bot PRs). Checkouts use `persist-credentials: false` by default; the two places that set it true — the `push-tag` job in deploy.yml and the release-PR job — do so with an explicit comment justifying why the token must remain. Untrusted or dispatch-provided inputs are passed through the `env:` block and referenced as shell variables (`\"$VERSION\"`, `\"$BRANCH\"`, `\"$PRERELEASE\"`) rather than interpolated directly into `run:` script bodies. This is enforced rather than merely conventional: the `zizmor` GitHub Actions auditor runs as a pre-commit hook with `--fix`, and jobs carry `timeout-minutes` so a hung run cannot occupy a runner indefinitely. Caveat: the specific rule set zizmor enforces is not visible in the shown files; the uniformity of the workflows is the direct evidence.",
+      "evidence": [
+        ".pre-commit-config.yaml",
+        ".github/workflows/test.yml",
+        ".github/workflows/deploy.yml",
+        ".github/workflows/prepare-release-pr.yml",
+        ".github/workflows/update-plugin-list.yml",
+        ".github/workflows/doc-check-links.yml",
+        ".github/workflows/stale.yml"
+      ],
+      "capability": "generative",
+      "confidence": "medium"
+    }
+  ]
+}
