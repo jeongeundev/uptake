@@ -13,7 +13,10 @@
     {
       "step": 1,
       "name": "survey-collect",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-27T02:03:41+0900",
+      "summary": "고정 revision에서 규칙별 라운드로빈과 문자 예산을 적용해 신호 파일을 결정적으로 수집하는 엔진을 추가했다.",
+      "completed_at": "2026-07-27T02:07:20+0900"
     },
     {
       "step": 2,
