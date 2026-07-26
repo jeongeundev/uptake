@@ -7,7 +7,7 @@
       "name": "wire-production-proposer",
       "status": "completed",
       "started_at": "2026-07-26T17:00:42+0900",
-      "completed_at": "2026-07-26T17:03:49+0900",
+      "completed_at": "2026-07-26T17:07:00+0900",
       "summary": "Route Handler 기본 경로에 Anthropic proposer 팩토리를 연결하고 타입화된 설정 오류·override 우선순위·metadata 전달 회귀 테스트를 추가했다."
     }
   ],
