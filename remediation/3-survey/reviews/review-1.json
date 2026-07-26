@@ -1,0 +1,75 @@
+{
+  "reviewId": "review-1",
+  "round": 1,
+  "kind": "full",
+  "target": {
+    "phase": "3-survey",
+    "branch": "feat-3-survey",
+    "baseCommit": "8c5062c9ef9bfe9beb927886080077c54a4af19a"
+  },
+  "reviewer": "codex",
+  "createdAt": "2026-07-27T02:51:22+0900",
+  "findings": [
+    {
+      "id": null,
+      "severity": "major",
+      "title": "모든 후보가 폐기되면 폐기 경로와 사유가 사용자에게 사라진다",
+      "detail": "surveyRepository는 모든 제안이 invalid-shape, duplicate-id 또는 no-evidence로 폐기되면 누적한 discardedEvidence와 discardedCandidates를 버리고 일반적인 no-candidate 오류만 반환한다. runSurvey도 이 일반 detail만 전달하며 SurveyWizard는 성공 응답일 때만 Discards를 렌더링한다. 따라서 환각 근거만 제안된 실행에서는 사용자가 어떤 경로가 not-collected였고 어떤 후보가 no-evidence로 폐기됐는지 볼 수 없다. 이는 두 단계의 모든 폐기를 사유와 함께 보여야 하며 조용히 사라지는 후보가 없어야 한다는 SURVEY 계약을 위반한다.",
+      "evidence": {
+        "files": [
+          "src/lib/engine/survey.ts",
+          "src/services/survey-service.ts",
+          "src/components/survey-wizard.tsx"
+        ],
+        "spec": [
+          "docs/ARCHITECTURE.md 「SURVEY 계약 — 환각 폐기 — 2단」",
+          "docs/PRD.md 「Phase 3 범위 — 모든 후보 근거는 고정된 revision에서 resolve된다」",
+          "ADR-009"
+        ]
+      },
+      "suggestedFix": "no-candidate 결과에도 discardedEvidence, discardedCandidates, skipped 및 revision을 보존하는 구조화된 결과를 반환하고, UI가 오류 상태에서도 항목별 폐기 경로와 사유를 렌더링하도록 한다. 모든 후보가 환각 근거만 가진 API/UI 회귀 테스트를 추가한다.",
+      "suggestedCategory": null,
+      "reviewerConfidence": "high",
+      "closureVerdict": null
+    },
+    {
+      "id": null,
+      "severity": "major",
+      "title": "SURVEY 구조화 출력 소진 오류가 화면에 명시적으로 표면화되지 않는다",
+      "detail": "Anthropic 어댑터는 JSON 파싱 또는 스키마 검증이 세 번 실패하면 일반 Error를 던진다. SURVEY Route Handler는 proposer 구성 오류만 잡고 runSurvey에서 발생한 이 오류는 처리하지 않는다. 클라이언트 postJson은 모든 응답이 JSON이라고 가정하며 investigate에도 try/finally가 없으므로, 프레임워크의 비정형 500 응답에서는 response.json()이 거부되고 UI는 오류 상세를 표시하지 못한 채 busy 상태에 남을 수 있다. 결정적 재검증 실패를 부분 후보 없이 명시적 오류로 표면화한다는 proposer 계약의 후반부가 제품 경계에서 성립하지 않는다.",
+      "evidence": {
+        "files": [
+          "src/app/api/survey/route.ts",
+          "src/services/proposer-anthropic.ts",
+          "src/components/survey-wizard.tsx"
+        ],
+        "spec": [
+          "docs/ARCHITECTURE.md 「SURVEY proposer 경계」",
+          "ADR-015"
+        ]
+      },
+      "suggestedFix": "구조화 출력 소진을 식별 가능한 proposer 오류로 만들고 Route Handler에서 구조화된 JSON 오류로 변환한 뒤, UI 요청 실패도 try/finally로 처리해 상세 오류를 표시하고 busy를 해제한다. 가짜 SDK가 세 번 malformed 응답을 반환하는 route/UI 경계 테스트를 추가한다.",
+      "suggestedCategory": null,
+      "reviewerConfidence": "high",
+      "closureVerdict": null
+    },
+    {
+      "id": null,
+      "severity": "minor",
+      "title": "SURVEY 채택의 independenceGroup이 저장소 식별자 그대로가 아니다",
+      "detail": "채택 조립표는 sources[0].independenceGroup을 사용자가 지정한 저장소 식별자 그대로 저장하도록 고정한다. 구현은 repository를 소문자 kebab 형태의 sourceId로 정규화한 뒤 그 sourceId를 independenceGroup에도 사용한다. 예를 들어 서로 다른 식별자 a/b와 a-b가 같은 그룹 값으로 직렬화될 수 있으며, 등재물도 문서화된 결정적 조립 결과와 달라진다.",
+      "evidence": {
+        "files": [
+          "src/lib/engine/survey-adopt.ts"
+        ],
+        "spec": [
+          "docs/ARCHITECTURE.md 「SURVEY 계약 — AuthoringRequest 자동 조립」"
+        ]
+      },
+      "suggestedFix": "source id 파생은 provenance 참조 키로만 사용하고 independenceGroup에는 input.repository를 그대로 넣는다. 구분자가 다른 저장소 식별자를 사용해 직렬화 값이 보존되는 테스트를 추가한다.",
+      "suggestedCategory": null,
+      "reviewerConfidence": "high",
+      "closureVerdict": null
+    }
+  ]
+}

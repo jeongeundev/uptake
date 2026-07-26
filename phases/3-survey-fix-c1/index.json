@@ -1,0 +1,13 @@
+{
+  "project": "uptake",
+  "phase": "3-survey-fix-c1",
+  "branch": "feat-3-survey",
+  "steps": [
+    {
+      "step": 0,
+      "name": "surface-discards-errors-and-preserve-group",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-07-27T02:53:00+0900"
+}
