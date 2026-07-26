@@ -40,7 +40,10 @@ npm run dev      # 개발 서버 (로컬호스트)
 npm run build    # 프로덕션 빌드
 npm run lint     # ESLint
 npm run test     # 테스트 (vitest)
+npm run eval:proposer # 선택적 실제 proposer smoke (AC 아님; 키가 없으면 정상 skip)
 ```
+
+실제 Anthropic proposer는 `ANTHROPIC_API_KEY`와 `UPTAKE_PROPOSER_MODEL`을 모두 요구한다. 구조화 출력(JSON schema)을 지원하는 모델을 명시해야 하며 권장 설정은 `UPTAKE_PROPOSER_MODEL=claude-opus-5`다(코드 기본값 없음).
 
 ## 하네스
 

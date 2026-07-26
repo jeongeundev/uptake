@@ -66,6 +66,10 @@ catalog/                # 손 큐레이션 씨앗 패턴 파일들 (repo에 동�
 
 **결정성 경계.** LLM은 후보 제안에만 들어온다. provenance resolve·참조 무결성(양방향)·독립성/스택 검사·`capability`↔`oracle` 일치·injection·VERIFY 판정은 MVP와 동일하게 **결정적**이다. proposer는 포트 뒤에 두고, 수용 기준 테스트는 이 포트를 **스텁으로 주입**해 임의·적대적 후보에도 게이트가 옳게 걸러내는지 검증한다 — "LLM이 좋은 패턴을 뽑는가"는 게이트가 아니라 eval의 몫이다(ADR-015).
 
+**LLM proposer 경계.** 실제 어댑터의 모델 ID는 코드 기본값 없이 `UPTAKE_PROPOSER_MODEL` 설정값으로 고정하며, provider와 model ID를 저작 세션 메타데이터에 기록한다. 세 제안 호출은 `output_config.format`의 JSON schema 구조화 출력을 사용하지만, 반환값은 결정적 코드로 다시 검증한다. JSON 파싱·스키마 검증 실패는 최대 2회 재시도한 뒤 오류로 표면화하며 부분 후보를 보정하지 않는다. 저장소에서 온 파일 경로·근거 발췌를 포함한 요청 데이터는 `untrustedBlock` 경계 안에 직렬화하고, 경계 안의 명령형 문장을 지시로 취급하지 않는 시스템 계약을 함께 보낸다. 실제 모델 품질은 비차단 `eval:proposer`에서 관찰하며 수용 테스트는 주입된 결정적 스텁과 가짜 SDK 클라이언트만 사용한다.
+
+**oracle 초안 경계.** 앵커 형태의 `gateTestId`와 injection(`targetRole`·`marker`·`replacement`)은 `src/lib/engine/oracle-draft.ts`의 결정적 템플릿에서 파생한다. LLM proposer는 `violation` 서술 후보만 제공하며 실행 문자열을 만들지 않는다. 등재 전 자기검증은 `tests/fixtures/authoring-selfverify-target/`의 번들 JS/TS+vitest 타깃을 복제해 실제 양성 green·음성 red를 확인한다.
+
 ## 결합점 탐지 계약
 `detectBindings(pattern, targetRepoRoot)`는 패턴의 `bindingPoints` 순서를 보존해 각 결합점을 다음 셋 중 하나로 반환한다.
 
@@ -315,7 +319,5 @@ type Pattern = {
 | 스키마 세부 — ID 문자 제약·중복 금지, unknown field, 경로 정규화, `schemaVersion` 미지원 거부, 파일 하나 오류 시 전체 로드 실패 여부 | 로더 구현 (AC-2) |
 | timeout 기본값, 출력 인코딩, cleanup 실패 처리 | 게이트 실행기 구현 |
 | `descriptive` 패턴 최소 수량(ADR-003의 "넓게") · 씨앗 "성공 repo" 선정 근거 기록 | M0 카탈로깅 스파이크 |
-| **EXTRACT의 LLM 경계** — 파일 후보 선정 프롬프트·휴리스틱, 모델 ID 고정, structured output, 재시도 | EXTRACT 구현 (phase 2) |
 | **ABSTRACT 대조 규칙** — role/binding 후보 경계, 역할 정합·병합, 근거 중복 제거 | ABSTRACT 구현 (phase 2) |
-| **oracle 초안 경계** — 템플릿 vs LLM 생성, 자기검증용 타깃 fixture 선정, 검증 실패 재시도 | oracle 저작 구현 (phase 2) |
 | **카탈로그 쓰기** — `patternId` 생성·충돌, 원자적 쓰기, 기존 파일 덮어쓰기 정책, 승인 저장소 결속 | 카탈로그 쓰기 구현 (phase 2) |
