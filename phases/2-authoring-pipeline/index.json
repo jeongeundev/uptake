@@ -62,7 +62,8 @@
       "name": "proposer-adapter",
       "status": "completed",
       "started_at": "2026-07-26T16:50:28+0900",
-      "summary": "Anthropic 구조화 출력 proposer 어댑터, 결정적 응답 검증·불신 경계, 선택적 비차단 eval과 설정 문서를 추가"
+      "summary": "Anthropic 구조화 출력 proposer 어댑터, 결정적 응답 검증·불신 경계, 선택적 비차단 eval과 설정 문서를 추가",
+      "completed_at": "2026-07-26T17:10:08+0900"
     },
     {
       "step": 8,
