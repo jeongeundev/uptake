@@ -20,7 +20,8 @@
 | `2-authoring-pipeline-step-3` | 동 phase step 3 | 07-26 16:19 | Ready | **규칙 위반**. major 1건 resolved |
 | `2-authoring-pipeline-step-7` | 동 phase step 7 | 07-26 16:59 | Ready | **규칙 위반**. major 1건 resolved |
 | `2-authoring-pipeline-step-8` | 동 phase step 8 | 07-26 17:22 | 없음 | **미결 방치 → `-final`로 흡수**(아래) |
-| `2-authoring-pipeline-final` | `2-authoring-pipeline` | 07-26 17:55 | **Escalate** (cycle 2) | 구현 완료 후의 정본 루프. F-001 미해결 |
+| `2-authoring-pipeline-final` | `2-authoring-pipeline` | 07-26 17:55 | **Escalate** (cycle 2) | 구현 완료 후의 정본 루프. F-001을 `2-fix` phase로 넘김 |
+| `2-fix` | `2-fix` | 07-26 20:05 | **Ready** | P1~P3을 처음으로 충족한 루프. findings 0건, score 100 |
 
 `2-fix` phase에도 같은 사고가 한 번 더 일어났다. step 1 실행 중 구현 세션이 스스로
 `remediation/2-fix/` 루프와 `phases/2-fix-fix-c1/`을 만들어 돌렸다(커밋 `0182860`~`59a9243`).
@@ -45,9 +46,21 @@ step 파일에 리뷰·remediation 금지 항목이 빠진 것이 원인이며, 
 `step-8` 루프의 manifest는 스크립트만 쓰기로 한 원칙(INV: manifest 직접 편집 금지)에 따라 손대지 않았다.
 그 루프의 미결 상태는 이 문서의 흡수 기록으로 대체한다.
 
-## 남은 blocker
+## F-001의 최종 처분
 
-`-final` 루프의 **F-001**(major, contract_violation) 하나다. 3번의 수정 시도(step-8-fix-c1,
-final-fix-c1, final-fix-c2)를 견뎠고, 원인은 저작 입력 변경이 서버를 거치지 않아
-`draft-store`가 폐기 시점을 알 수 없다는 구조다. `draft-store` 계약 변경이 필요해
-remediation fix 범위를 넘으며, 새 구현 phase로 처리한다.
+`-final` 루프의 **F-001**(major, contract_violation)은 3번의 remediation fix 시도
+(step-8-fix-c1, final-fix-c1, final-fix-c2)를 견뎠다. 세 번 모두 "입력이 바뀔 때 클라이언트가
+서버에 알린다"는 방향이었고, 알림이 유실·실패하면 창이 다시 열렸다. 원인은 `draft-store`가
+초안을 만든 입력을 저장하지 않는다는 **계약 설계**였고, 이는 remediation fix 범위를 넘는다.
+
+그래서 `/harness`의 새 구현 phase **`2-fix`**로 라우팅해 `draft-store` 계약 자체를 바꿨다 —
+초안을 그것을 만든 `AuthoringRequest`의 해시(`hashAuthoringRequest`)에 결속하고,
+`approveDraft`·`consumeApprovedDraft`가 서버에서 계산한 fingerprint와 대조해 불일치를
+`stale-input`으로 거절한다. 클라이언트가 아무것도 알려주지 않아도 불변식이 성립한다.
+증명은 `src/__tests__/authoring-route.test.ts`의
+"rejects stale input without a replacement draft POST and preserves the catalog"다 —
+**새 draft POST 없이** 입력을 바꾼 직후 옛 `draftId` approve·register가 거절되고 카탈로그가 불변임을
+확인한다. `2-fix` 루프의 독립 리뷰는 findings 0건으로 Ready였다.
+
+`-final` 루프의 manifest는 그 시점의 사실(Escalate, F-001 accepted)을 그대로 보존한다 —
+루프 간 상태를 소급 수정하지 않는 것이 원칙이고, 해소 기록은 이 문서가 담당한다.
