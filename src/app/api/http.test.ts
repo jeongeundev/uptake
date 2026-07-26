@@ -23,3 +23,13 @@ describe("authoring HTTP status mapping", () => {
     expect(statusCode("register-rejected")).toBe(400);
   });
 });
+
+describe("survey HTTP status mapping", () => {
+  it("distinguishes missing state, invalid inputs, and server rule errors", () => {
+    expect(statusCode("survey-not-found")).toBe(404);
+    expect(statusCode("candidate-not-found")).toBe(404);
+    expect(statusCode("repository-unresolved")).toBe(400);
+    expect(statusCode("adoption-failed")).toBe(400);
+    expect(statusCode("survey-rules-error")).toBe(500);
+  });
+});

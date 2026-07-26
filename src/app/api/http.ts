@@ -53,9 +53,14 @@ export function statusCode(status: string): number {
   if (
     status === "workflow-not-found" ||
     status === "pattern-not-found" ||
-    status === "draft-not-found"
+    status === "draft-not-found" ||
+    status === "survey-not-found" ||
+    status === "candidate-not-found"
   ) {
     return 404;
+  }
+  if (status === "survey-rules-error") {
+    return 500;
   }
   if (
     status === "invalid-request" ||
@@ -70,7 +75,12 @@ export function statusCode(status: string): number {
     status === "contrast-failed" ||
     status === "oracle-not-anchor" ||
     status === "self-verify-failed" ||
-    status === "register-rejected"
+    status === "register-rejected" ||
+    status === "repository-unresolved" ||
+    status === "revision-unpinnable" ||
+    status === "no-signal" ||
+    status === "no-candidate" ||
+    status === "adoption-failed"
   ) {
     return 400;
   }
