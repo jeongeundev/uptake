@@ -259,6 +259,33 @@ export async function contrastEvidence(
     );
   }
 
+  const connectedSources = sources.filter(({ id }) =>
+    referencedSources.has(id),
+  );
+  const connectedGroups = new Set(
+    connectedSources.map(({ independenceGroup }) => independenceGroup),
+  );
+  if (
+    request.evidenceStatus === "observed" &&
+    connectedGroups.size !== 1
+  ) {
+    return failure(
+      "reference-invalid",
+      `The assembled draft's observed evidence requires exactly one independence group; found ${connectedGroups.size}.`,
+      corroboration,
+    );
+  }
+  if (
+    request.evidenceStatus === "corroborated" &&
+    !connectedSources.some(({ isTargetStack }) => !isTargetStack)
+  ) {
+    return failure(
+      "reference-invalid",
+      "The assembled draft's corroborated evidence requires a non-target-stack source.",
+      corroboration,
+    );
+  }
+
   const narrative = await proposer.proposeNarrative({
     intent: request.intent,
     capability: request.capability,

@@ -291,6 +291,60 @@ describe("contrastEvidence", () => {
     });
   });
 
+  it("rejects observed authoring backed by two independence groups", async () => {
+    const result = await contrastEvidence(
+      request({ evidenceStatus: "observed" }),
+      extracted(),
+      proposer(),
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: "reference-invalid",
+      detail: expect.stringContaining(
+        "observed evidence requires exactly one independence group",
+      ),
+    });
+  });
+
+  it("rejects corroborated authoring backed only by target-stack sources", async () => {
+    const targetStackSources = sources().map((source) => ({
+      ...source,
+      isTargetStack: true,
+    }));
+    const result = await contrastEvidence(
+      request({
+        sources: targetStackSources.map(
+          ({
+            id,
+            repository,
+            stack,
+            isTargetStack,
+            independenceGroup,
+            independenceNote,
+          }) => ({
+            id,
+            repository,
+            stack,
+            isTargetStack,
+            independenceGroup,
+            independenceNote,
+          }),
+        ),
+      }),
+      extracted(targetStackSources),
+      proposer(),
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: "reference-invalid",
+      detail: expect.stringContaining(
+        "corroborated evidence requires a non-target-stack source",
+      ),
+    });
+  });
+
   it("reports missing anchor evidence before assembling a draft", async () => {
     const result = await contrastEvidence(
       request(),
