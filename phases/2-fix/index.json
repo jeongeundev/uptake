@@ -8,7 +8,7 @@
       "name": "bind-draft-to-input",
       "status": "completed",
       "started_at": "2026-07-26T19:34:03+0900",
-      "completed_at": "2026-07-26T19:39:10+0900",
+      "completed_at": "2026-07-26T19:40:27+0900",
       "summary": "저작 초안을 서버 계산 요청 fingerprint에 결속하고 stale approve/register를 차단했다."
     },
     {
