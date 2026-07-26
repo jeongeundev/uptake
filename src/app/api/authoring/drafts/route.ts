@@ -11,6 +11,7 @@ import {
   createAuthoringDraft,
   isAuthoringRequest,
 } from "@/services/authoring-store";
+import { AnthropicProposerConfigurationError } from "@/services/proposer-anthropic";
 
 export const runtime = "nodejs";
 
@@ -25,15 +26,17 @@ export async function POST(request: NextRequest) {
       400,
     );
   }
-  const proposer = configuredAuthoringProposer();
-  if (proposer === undefined) {
+  let proposer;
+  try {
+    proposer = configuredAuthoringProposer();
+  } catch (error) {
+    if (!(error instanceof AnthropicProposerConfigurationError)) {
+      throw error;
+    }
     return jsonWithSession(
       request,
       sessionId,
-      {
-        status: "invalid-request",
-        detail: "authoring proposer adapter is not configured",
-      },
+      { status: "invalid-request", detail: error.message },
       400,
     );
   }

@@ -24,6 +24,13 @@ export type AnthropicProposerConfig = {
   client: MessagesClient;
 };
 
+export class AnthropicProposerConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AnthropicProposerConfigurationError";
+  }
+}
+
 const systemPrompt = [
   "You propose observations about development methodology in supplied repositories.",
   "Describe what the repositories actually do; do not prescribe a correct practice.",
@@ -285,11 +292,15 @@ export function createAnthropicProposer(
 export function createAnthropicProposerFromEnv(): Proposer {
   const modelId = process.env.UPTAKE_PROPOSER_MODEL;
   if (!modelId) {
-    throw new Error("UPTAKE_PROPOSER_MODEL is required");
+    throw new AnthropicProposerConfigurationError(
+      "UPTAKE_PROPOSER_MODEL is required",
+    );
   }
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is required");
+    throw new AnthropicProposerConfigurationError(
+      "ANTHROPIC_API_KEY is required",
+    );
   }
   const client = new Anthropic({ apiKey });
   return createAnthropicProposer({ modelId, client: client.messages });

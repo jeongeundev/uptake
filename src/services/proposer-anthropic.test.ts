@@ -235,4 +235,13 @@ describe("createAnthropicProposerFromEnv", () => {
       "UPTAKE_PROPOSER_MODEL is required",
     );
   });
+
+  it("fails explicitly when the API key setting is absent", () => {
+    process.env.UPTAKE_PROPOSER_MODEL = "configured-model";
+    delete process.env.ANTHROPIC_API_KEY;
+
+    expect(() => createAnthropicProposerFromEnv()).toThrow(
+      "ANTHROPIC_API_KEY is required",
+    );
+  });
 });
