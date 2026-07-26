@@ -1,9 +1,0 @@
-{
-  "cycle": 1,
-  "decisions": {
-    "F-001": {
-      "category": "contract_violation",
-      "evidence": "test-results/.last-run.json은 base..HEAD에서 새로 추가된 Playwright 생성 산출물이고 .gitignore에는 test-results/ 규칙이 없다. E2E 결과가 제품 변경과 무관하게 추적 상태를 바꾸므로 AGENTS.md §3의 외과적 변경 계약 위반이 실재한다."
-    }
-  }
-}

@@ -131,8 +131,13 @@ npm test        # 테스트 통과
 ## 금지사항
 
 - {이 step에서 하지 말아야 할 것. "X를 하지 마라. 이유: Y" 형식}
+- **이 step 안에서 리뷰·remediation loop를 돌리지 마라. `$remediate` 호출, `scripts/execute.py` 재귀 실행, 새 phase 디렉터리 생성, `remediation/` 산출물 작성을 모두 포함한다. 이유: 코드를 쓴 세션이 스스로 리뷰하면 자기채점이다(ADR-008). 적대적 리뷰는 phase 완료 후 독립 세션의 `$remediate`가 맡는다.**
 - 기존 테스트를 깨뜨리지 마라
 ```
+
+위 금지사항 중 **리뷰·remediation loop 금지 항목은 모든 step 파일에 빠짐없이 넣어라.** 빠뜨리면
+구현 세션이 step 실행 도중 자기 리뷰를 돌리고 중첩 fix phase까지 만들어, phase 이름과 loop-id가
+갈라진다(실제 사고 기록: [`remediation/README.md`](../../../remediation/README.md)).
 
 ### E. 실행
 

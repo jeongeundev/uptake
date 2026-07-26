@@ -22,6 +22,13 @@
 | `2-authoring-pipeline-step-8` | 동 phase step 8 | 07-26 17:22 | 없음 | **미결 방치 → `-final`로 흡수**(아래) |
 | `2-authoring-pipeline-final` | `2-authoring-pipeline` | 07-26 17:55 | **Escalate** (cycle 2) | 구현 완료 후의 정본 루프. F-001 미해결 |
 
+`2-fix` phase에도 같은 사고가 한 번 더 일어났다. step 1 실행 중 구현 세션이 스스로
+`remediation/2-fix/` 루프와 `phases/2-fix-fix-c1/`을 만들어 돌렸다(커밋 `0182860`~`59a9243`).
+자기채점 리뷰는 계약상 무효이므로(ADR-008, `docs/HANDOFF.md` 8절) 두 디렉터리를 삭제해 loop-id를
+되찾았다. 그 루프가 지적한 `test-results/` ignore 누락은 정당한 발견이라 `.gitignore` 변경만 유지했다.
+step 파일에 리뷰·remediation 금지 항목이 빠진 것이 원인이며, `/harness` 스킬의 step 템플릿에
+그 항목을 못박아 재발을 막았다.
+
 ## `2-authoring-pipeline` 계열 경위
 
 `/harness` 실행 중 step마다 `/remediate`가 함께 돌아 루프가 7개로 갈라졌다. 그 결과:
