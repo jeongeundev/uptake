@@ -232,7 +232,11 @@ function runCollect(root: string): void {
   }
 
   const prompt = buildSurveyPrompt(files);
-  const promptPath = resolve(root, "tmp/survey-prototype/prompt.txt");
+  // 출력은 항상 uptake의 tmp/에 쓴다 — 분석 대상 저장소를 건드리지 않는다(읽기 전용).
+  const promptPath = resolve(
+    process.cwd(),
+    `tmp/survey-prototype/prompt-${root.split("/").pop()}.txt`,
+  );
   mkdirSync(dirname(promptPath), { recursive: true });
   writeFileSync(promptPath, prompt, "utf8");
 
@@ -273,8 +277,12 @@ function runScore(root: string, candidatesPath: string): void {
   console.log(
     `${B}환각 후보${R}   ${scored.filter((c) => c.hallucinated.length > 0).length}건 ${D}(현행 게이트라면 폐기됨)${R}\n`,
   );
-  console.log(`${B}정답지 — 눈으로 대조하라 (recall)${R}`);
-  for (const d of KNOWN_DISCIPLINES) console.log(`  ${D}·${R} ${d}`);
+  if (root === process.cwd()) {
+    console.log(`${B}정답지 — 눈으로 대조하라 (recall)${R}`);
+    for (const d of KNOWN_DISCIPLINES) console.log(`  ${D}·${R} ${d}`);
+  } else {
+    console.log(`${B}정답지 없음${R} ${D}— 대상이 uptake가 아니다. recall은 저장소를 아는 사람이 판정한다.${R}`);
+  }
   console.log(`\n${D}해상도는 discipline 필드를 읽고 판정한다. 기계가 못 한다.${R}`);
 }
 
@@ -314,8 +322,11 @@ async function runPropose(root: string): Promise<void> {
   runScore(root, outPath);
 }
 
-const [mode, arg] = process.argv.slice(2);
-const root = process.cwd();
+// --root <dir>로 다른 저장소를 대상 삼는다. 없으면 cwd.
+const argv = process.argv.slice(2);
+const rootFlag = argv.indexOf("--root");
+const root = rootFlag === -1 ? process.cwd() : resolve(argv[rootFlag + 1]);
+const [mode, arg] = rootFlag === -1 ? argv : argv.filter((_, i) => i !== rootFlag && i !== rootFlag + 1);
 if (mode === "propose") {
   await runPropose(root);
 } else if (mode === "score") {
