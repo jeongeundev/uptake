@@ -1,0 +1,23 @@
+{
+  "loopId": "2-authoring-pipeline",
+  "target": {
+    "phase": "2-authoring-pipeline",
+    "branch": "feat-2-authoring-pipeline",
+    "baseCommit": "3b9f4d48a01ea39e1addc8066086335e352743c8"
+  },
+  "createdAt": "2026-07-26T15:56:47+0900",
+  "state": "ready",
+  "currentCycle": 1,
+  "maxCycles": 2,
+  "findings": [],
+  "cycles": [
+    {
+      "cycle": 1,
+      "fixPhase": "2-authoring-pipeline-fix-c1",
+      "review": null,
+      "closureReview": null,
+      "verdict": "Ready",
+      "reasons": []
+    }
+  ]
+}
