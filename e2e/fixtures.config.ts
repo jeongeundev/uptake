@@ -13,6 +13,8 @@ type FixtureState = {
   catalogDir: string;
   sourceRoot: string;
   targetRoot: string;
+  authoringTargetRoot: string;
+  proposerStubScript: string;
 };
 
 const sourceFiles = [
@@ -63,6 +65,8 @@ export function createE2EFixtures(): FixtureState {
   const sourceRoot = resolve(root, "sources");
   const catalogDir = resolve(root, "catalog");
   const targetRoot = resolve(root, "target-js-vitest");
+  const authoringTargetRoot = resolve(root, "authoring-target-js-vitest");
+  const proposerStubScript = resolve(root, "proposer-stub.json");
   const sources = [
     {
       id: "python-one",
@@ -110,17 +114,81 @@ export function createE2EFixtures(): FixtureState {
     JSON.stringify(fixturePattern),
   );
 
-  mkdirSync(targetRoot);
+  for (const target of [targetRoot, authoringTargetRoot]) {
+    mkdirSync(target);
+    writeFileSync(
+      resolve(target, "package.json"),
+      JSON.stringify({
+        name: "uptake-e2e-target",
+        private: true,
+        devDependencies: { vitest: "^3.2.4" },
+      }),
+    );
+    commitRepository(target);
+  }
+
   writeFileSync(
-    resolve(targetRoot, "package.json"),
+    proposerStubScript,
     JSON.stringify({
-      name: "uptake-e2e-target",
-      private: true,
-      devDependencies: { vitest: "^3.2.4" },
+      metadata: { providerId: "stub", modelId: "authoring-e2e" },
+      fileCandidates: sources.flatMap((source) => [
+        ...sourceFiles.map((file) => ({
+          sourceId:
+            source.id === "python-one" ? "source-1" : "source-2",
+          path: file.path,
+          roleId: file.role,
+          rationale: "Deterministic E2E evidence.",
+        })),
+        {
+          sourceId:
+            source.id === "python-one" ? "source-1" : "source-2",
+          path: "missing/provenance.md",
+          roleId: "spec-artifact",
+          rationale: "Unresolved candidate for AC-C9.",
+        },
+      ]),
+      contrast: {
+        roles: sourceFiles.map((file) => ({
+          id: file.role,
+          description: `Observed ${file.role} role.`,
+        })),
+        bindingPoints: [
+          {
+            id: "spec-format",
+            description: "Specification file format.",
+            kind: "spec-format",
+          },
+          {
+            id: "checker",
+            description: "Verification runner.",
+            kind: "checker",
+          },
+          {
+            id: "gate-location",
+            description: "Blocking gate location.",
+            kind: "gate-location",
+          },
+          {
+            id: "naming",
+            description: "Specification naming convention.",
+            kind: "naming",
+          },
+        ],
+      },
+      narrative: {
+        violation: "A material change lacks its declaration.",
+        tradeoffs:
+          "Observed in successful repositories; survivorship bias remains.",
+      },
     }),
   );
-  commitRepository(targetRoot);
 
-  return { root, catalogDir, sourceRoot, targetRoot };
+  return {
+    root,
+    catalogDir,
+    sourceRoot,
+    targetRoot,
+    authoringTargetRoot,
+    proposerStubScript,
+  };
 }
-
