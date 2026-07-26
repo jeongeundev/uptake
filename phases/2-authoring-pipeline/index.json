@@ -37,7 +37,9 @@
     {
       "step": 4,
       "name": "oracle-selfverify",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-26T16:28:02+0900",
+      "summary": "앵커 oracle 결정적 초안과 소유권 안전 fixture materialization을 추가하고 실제 VERIFY의 양성 green·음성 red만 저작 자기검증 성공으로 인정"
     },
     {
       "step": 5,

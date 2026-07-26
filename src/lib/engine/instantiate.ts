@@ -1,5 +1,5 @@
 import type { BindingDetection } from "@/lib/engine/detect";
-import { ANCHOR_ROLE_IDS } from "@/services/proposer";
+import { hasAnchorRoleShape } from "@/lib/engine/anchor-shape";
 import type { InstantiatedInjection, Pattern } from "@/types/pattern";
 
 export type GeneratedFile = {
@@ -29,14 +29,6 @@ const gatePath = "uptake-gate/spec-gate.test.ts";
 
 function markerOccurrences(content: string, marker: string): number {
   return marker.length === 0 ? 0 : content.split(marker).length - 1;
-}
-
-function hasAnchorRoleShape(pattern: Pattern): boolean {
-  const roleIds = new Set(pattern.roles.map(({ id }) => id));
-  return (
-    roleIds.size === ANCHOR_ROLE_IDS.length &&
-    ANCHOR_ROLE_IDS.every((roleId) => roleIds.has(roleId))
-  );
 }
 
 export function instantiate(
