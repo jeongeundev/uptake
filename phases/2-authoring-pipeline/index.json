@@ -44,7 +44,10 @@
     {
       "step": 5,
       "name": "catalog-write",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-26T16:35:47+0900",
+      "summary": "단일 패턴 하드 게이트 재사용, 세션 결속 초안 승인 저장소, 스테이징 검증 후 무덮어쓰기 원자적 등재를 테스트와 함께 추가",
+      "completed_at": "2026-07-26T16:41:32+0900"
     },
     {
       "step": 6,
