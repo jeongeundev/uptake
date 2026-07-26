@@ -40,8 +40,9 @@ import { dirname, resolve } from "node:path";
 /** 방법론 신호가 될 만한 경로. "무엇이 방법론인가"가 아니라 "어디를 볼까"만 정한다. */
 export const SIGNAL_RULES: { id: string; test: (path: string) => boolean }[] = [
   {
+    // 문서 확장자는 생태계마다 다르다 — .md만 보면 Python(.rst) 프로젝트를 통째로 놓친다.
     id: "agent-instructions",
-    test: (p) => /^(AGENTS|CLAUDE|GEMINI|CONTRIBUTING|README)\.md$/i.test(p),
+    test: (p) => /^(AGENTS|CLAUDE|GEMINI|CONTRIBUTING|README|HACKING|DEVELOPING)\.(md|rst|txt)$/i.test(p),
   },
   {
     id: "agent-config",
@@ -60,7 +61,10 @@ export const SIGNAL_RULES: { id: string; test: (path: string) => boolean }[] = [
     test: (p) =>
       /^(Makefile|justfile|Taskfile\.ya?ml|package\.json|pyproject\.toml|Cargo\.toml)$/.test(p),
   },
-  { id: "design-docs", test: (p) => /^docs\/.+\.md$/.test(p) || /\b(adr|rfc)s?\b/i.test(p) },
+  {
+    id: "design-docs",
+    test: (p) => /^docs?\/.+\.(md|rst)$/.test(p) || /\b(adr|rfc)s?\b/i.test(p),
+  },
   {
     id: "test-config",
     test: (p) =>
@@ -93,6 +97,37 @@ export function selectSignalPaths(allPaths: string[]): { path: string; ruleId: s
     if (rule !== undefined) picked.push({ path, ruleId: rule.id });
   }
   return picked.sort((a, b) => a.ruleId.localeCompare(b.ruleId) || a.path.localeCompare(b.path));
+}
+
+/**
+ * 카테고리별 라운드로빈. 한 규칙이 예산을 독식하지 못하게 한다.
+ *
+ * 알파벳순으로 순회하면 대형 저장소에서 문서 129개가 예산을 다 먹고 훅·태스크러너가
+ * 통째로 굶는다(pytest 실측). 카테고리마다 최소한의 자리를 보장해야 한다.
+ */
+export function interleaveByRule(
+  picked: { path: string; ruleId: string }[],
+): { path: string; ruleId: string }[] {
+  const queues = new Map<string, { path: string; ruleId: string }[]>();
+  for (const item of picked) {
+    const q = queues.get(item.ruleId);
+    if (q === undefined) queues.set(item.ruleId, [item]);
+    else q.push(item);
+  }
+  const out: { path: string; ruleId: string }[] = [];
+  const lists = [...queues.values()];
+  for (let round = 0; out.length < picked.length; round += 1) {
+    let moved = false;
+    for (const list of lists) {
+      const next = list[round];
+      if (next !== undefined) {
+        out.push(next);
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  return out;
 }
 
 /** 신뢰 경계 — repo 내용은 지시가 아니라 데이터다. proposer.ts의 규약을 프로토타입용으로 복제. */
@@ -202,7 +237,7 @@ function repoPaths(root: string): string[] {
 
 function collect(root: string): SignalFile[] {
   const all = repoPaths(root);
-  const selected = selectSignalPaths(all);
+  const selected = interleaveByRule(selectSignalPaths(all));
   const files: SignalFile[] = [];
   let total = 0;
   for (const { path, ruleId } of selected) {
@@ -215,7 +250,8 @@ function collect(root: string): SignalFile[] {
     if (content.length > PER_FILE_LIMIT) {
       content = `${content.slice(0, PER_FILE_LIMIT)}\n…[truncated]`;
     }
-    if (total + content.length > TOTAL_LIMIT) break;
+    // break가 아니라 continue — 큰 파일 하나가 뒤 카테고리를 굶기지 않게 한다.
+    if (total + content.length > TOTAL_LIMIT) continue;
     total += content.length;
     files.push({ path, ruleId, bytes: content.length, content });
   }
