@@ -1,0 +1,9 @@
+{
+  "project": "uptake",
+  "phase": "2-fix",
+  "branch": "feat-2-authoring-pipeline",
+  "steps": [
+    { "step": 0, "name": "bind-draft-to-input", "status": "pending" },
+    { "step": 1, "name": "authoring-ui-input-binding", "status": "pending" }
+  ]
+}
