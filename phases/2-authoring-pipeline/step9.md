@@ -97,4 +97,5 @@ python3 -m pytest scripts/ -q
 - **저장소에 커밋된 `catalog/` 아래에 테스트가 파일을 쓰지 마라. 이유: 씨앗 카탈로그를 오염시킨다. 임시 카탈로그 디렉터리를 `UPTAKE_CATALOG_DIR`로 주입하라.**
 - **실행이 만들지 않은 디렉터리를 teardown에서 삭제하지 마라. 이유: 외부 제공 fixture root까지 지운 결함이 이미 한 번 발생했다.**
 - **기존 `e2e/vertical-slice.spec.ts`를 수정해 통과시키지 마라. 이유: phase 1의 회귀 방지 증거다. 이 E2E는 새 파일로 추가한다.**
+- **이 step 안에서 리뷰·remediation loop를 돌리지 마라. `$remediate` 호출, `scripts/execute.py` 재귀 실행, 새 phase 디렉터리 생성, `remediation/` 산출물 작성을 모두 포함한다. 이유: 코드를 쓴 세션이 스스로 리뷰하면 자기채점이다(ADR-008). 적대적 리뷰는 phase 완료 후 독립 세션의 `$remediate`가 맡는다.**
 - 기존 테스트를 깨뜨리지 마라.

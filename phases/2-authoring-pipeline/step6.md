@@ -132,4 +132,5 @@ npm test
 - **`workflow-store.ts`의 기존 이식 workflow 계약을 바꾸지 마라. 이유: phase 1의 확정된 UI/API 계약이며 E2E가 의존한다.**
 - **저작 세션 상태를 디스크에 영속화하지 마라. 이유: 서버 프로세스 수명 in-memory가 계약이다(ARCHITECTURE 상태 관리).**
 - **한 Route Handler에서 초안 생성과 등재를 함께 처리하지 마라. 이유: 사용자 승인 이벤트가 두 단계 사이에 반드시 들어가야 한다.**
+- **이 step 안에서 리뷰·remediation loop를 돌리지 마라. `$remediate` 호출, `scripts/execute.py` 재귀 실행, 새 phase 디렉터리 생성, `remediation/` 산출물 작성을 모두 포함한다. 이유: 코드를 쓴 세션이 스스로 리뷰하면 자기채점이다(ADR-008). 적대적 리뷰는 phase 완료 후 독립 세션의 `$remediate`가 맡는다.**
 - 기존 테스트를 깨뜨리지 마라.

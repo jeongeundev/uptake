@@ -94,4 +94,5 @@ npm test
 - **UI_GUIDE의 AI 슬롭 안티패턴을 쓰지 마라(backdrop-filter blur, gradient-text 등 표에 적힌 전부). 이유: 문서에 명시된 금지 사항이다.**
 - **기존 `catalog-bindings-wizard.tsx`를 재구조화하지 마라. 이유: phase 1의 확정 UI 계약이고 브라우저 E2E가 그 DOM에 의존한다. 배치를 위한 최소 변경만 하라.**
 - **클라이언트 상태로 승인을 대체하지 마라. 이유: 승인은 서버 저장소의 상태 전이다. UI의 boolean은 화면 조작일 뿐이다.**
+- **이 step 안에서 리뷰·remediation loop를 돌리지 마라. `$remediate` 호출, `scripts/execute.py` 재귀 실행, 새 phase 디렉터리 생성, `remediation/` 산출물 작성을 모두 포함한다. 이유: 코드를 쓴 세션이 스스로 리뷰하면 자기채점이다(ADR-008). 적대적 리뷰는 phase 완료 후 독립 세션의 `$remediate`가 맡는다.**
 - 기존 테스트를 깨뜨리지 마라.
