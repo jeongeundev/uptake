@@ -1,0 +1,145 @@
+{
+  "candidates": [
+    {
+      "id": "test-first-pre-edit-hook",
+      "intent": "Prevents implementation code from being written before a test for it exists.",
+      "discipline": "A PreToolUse hook (scripts/hooks/tdd-guard.sh) intercepts Claude 'Edit|Write' and Codex 'apply_patch' tool calls, extracts the target paths, and emits permissionDecision \"deny\" for any .ts/.tsx/.js/.jsx file that has no sibling <name>.test.* / <name>.spec.*, no __tests__/<name>.test.* in the same or parent directory, and no src/__tests__/<name>.test.*. Deletions, markdown, JSON/config, types/ files and Next.js framework files (page/layout/loading/error/not-found/globals.css) are exempt; a directory whose name merely contains 'test' (e.g. latest/) does not grant exemption. The hook is registered for both runtimes in .claude/settings.json and .codex/hooks.json, and scripts/test_tdd_guard.py asserts the deny path, not only the allow path.",
+      "evidence": [
+        "scripts/hooks/tdd-guard.sh",
+        ".claude/settings.json",
+        ".codex/hooks.json",
+        "scripts/test_tdd_guard.py",
+        "AGENTS.md"
+      ],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "stop-gate-full-verification",
+      "intent": "Stops an agent session from ending while the tree is broken.",
+      "discipline": "A Stop hook (scripts/hooks/stop-verify.sh) runs `npm run lint && npm run build && npm run test` in the session cwd and exits 2 on the first failure, which blocks the stop; all subprocess output is redirected to stderr so the hook's JSON stdout channel stays empty. Registered as the Stop matcher in both .claude/settings.json and .codex/hooks.json. scripts/test_stop_hook.py pins both the exact command order (lint, build, test) and the empty-stdout contract, including the short-circuit on build failure.",
+      "evidence": [
+        "scripts/hooks/stop-verify.sh",
+        ".claude/settings.json",
+        ".codex/hooks.json",
+        "scripts/test_stop_hook.py",
+        "package.json"
+      ],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "discriminating-gate-proof",
+      "intent": "Forces every gate to demonstrate that it can fail, so a green result counts as evidence rather than decoration.",
+      "discipline": "Passing is explicitly declared insufficient proof: each gate must be exercised twice — a compliant case expected to be green and a seeded violation expected to be red — and a run that produced no structured reporter output (spawn/install/config/syntax error, timeout, signal) must be reported as a distinct third outcome ('gate-error') that is never counted as a caught violation. The rule is applied to the repo's own harness (scripts/test_tdd_guard.py is split into TestBlocksUntestedCode and TestAllowsTestedOrExempt precisely because a mis-written guard fails open and silently allows every edit; scripts/test_stop_hook.py tests the blocking case) and to the product's VERIFY contract, whose status taxonomy separates 'negative-not-caught' (gate stayed green on a seeded violation = failure) from ordinary failures, with docs/UI_GUIDE.md requiring a raw green in the negative run to be rendered red.",
+      "evidence": [
+        "AGENTS.md",
+        "docs/ADR.md",
+        "docs/ARCHITECTURE.md",
+        "docs/PRD.md",
+        "docs/UI_GUIDE.md",
+        "scripts/test_tdd_guard.py",
+        "scripts/test_stop_hook.py"
+      ],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "phase-step-runner",
+      "intent": "Executes an implementation plan as small, independently runnable steps whose state only a deterministic runner may write.",
+      "discipline": "Work is decomposed into phases/<phase>/step{N}.md files covering one layer or module each, each self-contained (references to earlier conversations are forbidden, required paths must be listed inside the file) and ending in acceptance criteria written as runnable commands rather than prose. scripts/execute.py is the sole writer of run state: it checks out feat-<phase> (or stays put with --current-branch), injects AGENTS.md plus every docs/*.md into each step prompt, carries completed steps' one-line summary fields forward as context, retries a failed step at most 3 times while feeding the previous error back into the prompt, commits code and step metadata as two separate commits ('feat(phase): step N — name' then 'chore(phase): step N output'), and stamps created_at/started_at/completed_at/failed_at/blocked_at. Statuses are pending|completed|error|blocked; error and blocked halt the run and require a human to reset the status to pending before re-running. scripts/test_execute.py pins this behaviour.",
+      "evidence": [
+        ".agents/skills/harness/SKILL.md",
+        ".claude/commands/harness.md",
+        "scripts/execute.py",
+        "scripts/test_execute.py",
+        "AGENTS.md"
+      ],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "independent-review-remediation-loop",
+      "intent": "Keeps the verdict on whether work is finished out of the hands of whoever produced the work.",
+      "discipline": "One review loop runs per implementation phase, and only after that phase is closed (all steps completed, phase-level completed_at present, phases/index.json marked completed); per-step loop ids and mid-phase loops are forbidden. A fresh reviewer agent produces the full review, findings receive stable F-NNN ids plus a sha1 fingerprint over (normalized first evidence path | sorted spec refs | title slug), the main agent triages each finding with mandatory evidence, a fix phase runs on the same target branch, and a third agent — different from both the full reviewer and the fix implementer — performs the closure review. scripts/remediate.py enforces the invariants: it alone writes manifest.json; 'resolved' is reachable only through closure ingest, never claimed by the implementer; a re-detected fingerprint on a resolved or rejected finding escalates to requires-human; the advisory quality score can never override a hard gate; disallowed state transitions are refused. Step templates carry a standing prohibition against an implementing session opening the loop on its own output.",
+      "evidence": [
+        ".agents/skills/remediate/CONTRACT.md",
+        ".agents/skills/remediate/SKILL.md",
+        ".claude/commands/remediate.md",
+        "scripts/remediate.py",
+        "scripts/test_remediate.py",
+        ".agents/skills/harness/SKILL.md",
+        "docs/HANDOFF.md"
+      ],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "evidence-or-discard",
+      "intent": "Rejects any claim — about the code or about a review finding — that carries no resolvable evidence.",
+      "discipline": "Enforced at two layers. In the product: every extracted or generated artifact must carry a provenance path that resolves against the real source tree, and the catalog refuses to load on unresolved provenance, empty sources/provenance arrays, reference-integrity violations checked in both directions (orphan source with no evidence file, orphan role declared without provenance), or a capability↔oracle mismatch; the engine may not silently downgrade a declared evidenceStatus that the data does not support. In the process: scripts/remediate.py refuses any triage decision whose evidence string is empty or blank, refuses a 'duplicate' decision without an existing canonicalId, and requires exactly one of category or decision per finding — and the remediate skill requires every evidence file and spec reference in a review to exist in the target tree before the review is written to disk.",
+      "evidence": [
+        "AGENTS.md",
+        "docs/ADR.md",
+        "docs/ARCHITECTURE.md",
+        "docs/PRD.md",
+        ".agents/skills/remediate/CONTRACT.md",
+        ".agents/skills/remediate/SKILL.md",
+        "scripts/remediate.py",
+        "scripts/test_remediate.py"
+      ],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "spec-before-code-acceptance-criteria",
+      "intent": "Fixes numbered acceptance criteria in documents before implementation so verification derives from the spec rather than from the code that happened to be written.",
+      "discipline": "docs/PRD.md carries numbered acceptance criteria (AC-1…AC-12, plus AC-2b/AC-7b) each paired with a stated verification method, declared to be transcribed into tests before implementation; docs/ADR.md records every decision in a fixed 결정/이유/트레이드오프 form; docs/ARCHITECTURE.md holds the executable contracts (VERIFY execution, binding detection, gate result taxonomy). Those documents are injected verbatim into every step prompt by scripts/execute.py, step files must express their acceptance criteria as runnable commands, review findings cite AC ids in evidence.spec, and the /review skill checks a change against a fixed five-item list: ARCHITECTURE directory structure, ADR stack choices, presence of tests for new behaviour, AGENTS.md CRITICAL rules, and a passing build.",
+      "evidence": [
+        "docs/PRD.md",
+        "docs/ADR.md",
+        "docs/ARCHITECTURE.md",
+        "AGENTS.md",
+        ".agents/skills/review/SKILL.md",
+        ".claude/commands/review.md",
+        ".agents/skills/harness/SKILL.md",
+        "scripts/execute.py"
+      ],
+      "capability": "generative",
+      "confidence": "medium"
+    },
+    {
+      "id": "dual-runtime-harness-parity",
+      "intent": "Keeps a single canonical definition of each rule while two different agent runtimes each load it in their own format.",
+      "discipline": "Skills exist once at .agents/skills/<name>/SKILL.md and are exposed to Claude Code as symlinks in .claude/commands/; AGENTS.md records the measured fact that Claude Code does not read .agents/skills/, so deleting a link removes the skill outright — the link is mandatory and only the canonical file is edited. CLAUDE.md likewise delegates entirely to AGENTS.md instead of duplicating rules. Hook registrations are duplicated in .codex/hooks.json and .claude/settings.json but point at one shared script that branches on payload shape (apply_patch with tool_input.command, which may be a string or an array, vs Edit|Write with an absolute tool_input.file_path), and scripts/test_tdd_guard.py keeps a dedicated test class per payload format so a change cannot break one runtime silently. `python3 -m pytest scripts/` is the stated gate after touching a hook script.",
+      "evidence": [
+        "AGENTS.md",
+        "CLAUDE.md",
+        ".agents/skills/harness/SKILL.md",
+        ".claude/commands/harness.md",
+        ".claude/settings.json",
+        ".codex/hooks.json",
+        "scripts/hooks/tdd-guard.sh",
+        "scripts/test_tdd_guard.py"
+      ],
+      "capability": "generative",
+      "confidence": "medium"
+    },
+    {
+      "id": "scope-containment-routing",
+      "intent": "Stops in-flight work from growing by routing anything outside the declared scope into a separate unit of work.",
+      "discipline": "A step covers one layer or module, and the runner's prompt preamble instructs the session to perform only the work named in that step and to create no additional files or features. Each step file carries an explicit 금지사항 list written as 'do not do X, reason Y', which must always include the prohibition on running a review/remediation loop, re-invoking scripts/execute.py, creating a new phase directory, or writing remediation/ artifacts from inside the step. The same rule is mechanized in the review loop as a routing switch: findings triaged as missing_feature become 'deferred' with a routedTo phase name and are never repaired in the current loop, design_issue becomes 'requires-human', and only implementation_bug / contract_violation / test_gap enter a fix phase. AGENTS.md separately forbids unrequested flexibility, abstraction, or future-proofing.",
+      "evidence": [
+        "AGENTS.md",
+        ".agents/skills/harness/SKILL.md",
+        ".claude/commands/harness.md",
+        "scripts/execute.py",
+        ".agents/skills/remediate/CONTRACT.md",
+        "scripts/remediate.py",
+        "scripts/test_remediate.py"
+      ],
+      "capability": "descriptive",
+      "confidence": "medium"
+    }
+  ]
+}
