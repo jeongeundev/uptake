@@ -29,7 +29,9 @@
     {
       "step": 3,
       "name": "abstract-contrast",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-26T16:08:57+0900",
+      "summary": "사용자 지정 독립성 그룹을 결정적으로 대조해 역할별 corroboration·강등·참조 검사를 수행하는 ABSTRACT 엔진을 추가"
     },
     {
       "step": 4,
