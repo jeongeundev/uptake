@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 
 import type { SurveyProposer } from "@/services/proposer";
-import { AnthropicProposerConfigurationError } from "@/services/proposer-anthropic";
+import {
+  AnthropicProposerConfigurationError,
+  createAnthropicProposerFromEnv,
+} from "@/services/proposer-anthropic";
 import {
   createStubSurveyProposer,
   type StubSurveyScript,
@@ -23,9 +26,7 @@ export function configuredSurveyProposer(): SurveyProposer {
     ) as StubSurveyScript;
     return createStubSurveyProposer(script);
   }
-  throw new AnthropicProposerConfigurationError(
-    "SURVEY Anthropic proposer is not configured",
-  );
+  return createAnthropicProposerFromEnv();
 }
 
 export function __setSurveyProposerForTests(

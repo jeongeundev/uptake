@@ -226,7 +226,7 @@ describe("survey route boundary", () => {
     },
   );
 
-  it("returns an explicit error when the survey proposer is not configured", async () => {
+  it("returns the existing configuration error when the proposer model is absent", async () => {
     __setSurveyProposerForTests(undefined);
     const response = await runSurvey(
       surveyRequest({ repository: "example/one" }),
@@ -234,7 +234,7 @@ describe("survey route boundary", () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
       status: "invalid-request",
-      detail: "SURVEY Anthropic proposer is not configured",
+      detail: "UPTAKE_PROPOSER_MODEL is required",
     });
   });
 
