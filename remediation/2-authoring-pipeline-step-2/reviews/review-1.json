@@ -1,0 +1,13 @@
+{
+  "reviewId": "review-1",
+  "round": 1,
+  "kind": "full",
+  "target": {
+    "phase": "2-authoring-pipeline",
+    "branch": "feat-2-authoring-pipeline",
+    "baseCommit": "3b9f4d48a01ea39e1addc8066086335e352743c8"
+  },
+  "reviewer": "codex",
+  "createdAt": "2026-07-26T16:08:00+0900",
+  "findings": []
+}
