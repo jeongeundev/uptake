@@ -32,7 +32,7 @@
       "status": "completed",
       "started_at": "2026-07-27T02:11:23+0900",
       "summary": "고정 revision의 수집 파일만 근거로 허용하고 형태 불량·중복·환각 후보의 폐기 사유를 보존하는 SURVEY 엔진을 추가했다.",
-      "completed_at": "2026-07-27T02:14:45+0900"
+      "completed_at": "2026-07-27T02:15:45+0900"
     },
     {
       "step": 4,
