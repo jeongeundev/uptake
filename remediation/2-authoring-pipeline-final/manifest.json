@@ -6,7 +6,7 @@
     "baseCommit": "3b9f4d48a01ea39e1addc8066086335e352743c8"
   },
   "createdAt": "2026-07-26T17:55:16+0900",
-  "state": "closing",
+  "state": "escalated",
   "currentCycle": 2,
   "maxCycles": 2,
   "findings": [
@@ -50,6 +50,14 @@
           "by": "closure",
           "evidence": "still-open: 아직 해결되지 않았다. src/services/draft-store.ts의 무효화는 같은 세션에서 createDraft가 다시 호출될 때만 수행된다. 반면 src/components/authoring-wizard.tsx의 invalidateReview는 입력 변경 시 클라이언트 상태만 지우며 서버의 기존 draftId를 폐기하지 않는다. 따라서 입력을 변경하고 새 초안을 제출하기 전에는 숨겨진 이전 draftId의 직접 approve 요청이 여전히 성공할 수 있다. 새 draft POST 이후의 거절 테스트는 추가됐지만, 원 finding과 docs/ARCHITECTURE.md의 '이전 입력을 바꾸면 downstream 서버측 상태를 폐기' 계약을 충족하지 못한다.",
           "at": "2026-07-26T18:09:03+0900"
+        },
+        {
+          "cycle": 2,
+          "from": "accepted",
+          "to": "accepted",
+          "by": "closure",
+          "evidence": "still-open: 아직 해결되지 않았다. `AuthoringWizard.invalidateReview`는 현재 draft가 있으면 reject Route Handler로 요청을 시작하지만, `void postJson(...).catch(() => undefined)`로 완료를 기다리지 않고 실패도 무시한 채 즉시 `setDraft(null)` 등으로 UI 상태를 폐기한다. 따라서 reject 요청이 네트워크 오류로 실패하거나 유실되면 `draft-store`의 레코드는 pending 또는 approved로 남는다. pending이면 `approveDraft`가 계속 승인할 수 있고, approved이면 `consumeApprovedDraft`를 통한 register가 계속 가능하다. 요청이 성공하는 경우에도 입력 변경 상태 전이와 서버 reject 완료 사이에 비동기 경쟁 창이 있다. 추가된 컴포넌트 테스트는 reject URL이 호출됐다는 사실만 확인하며, 실패·유실 시 직접 approve가 거절되는지 검증하지 않는다. Route Handler 테스트도 명시적 reject가 성공한 뒤의 차단과 새 draft POST 뒤의 차단만 검사하므로, AC 5의 '입력 변경 직후 새 draft POST 없이 이전 draftId 직접 approve 거절'을 증명하지 않는다. reject 서비스의 세션 소유권 및 rejected draft의 approve/register 차단은 구현됐지만, 서버 폐기가 결정적으로 완료되지 않아 원 finding의 창은 남아 있다.",
+          "at": "2026-07-26T19:08:52+0900"
         }
       ]
     },
@@ -109,9 +117,12 @@
       "cycle": 2,
       "fixPhase": "2-authoring-pipeline-final-fix-c2",
       "review": null,
-      "closureReview": null,
-      "verdict": null,
-      "reasons": []
+      "closureReview": "review-3",
+      "verdict": "Escalate",
+      "reasons": [
+        "open blocker/major: F-001",
+        "non-terminal blocker/major: F-001"
+      ]
     }
   ]
 }

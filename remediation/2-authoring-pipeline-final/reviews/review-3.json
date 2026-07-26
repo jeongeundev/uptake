@@ -1,0 +1,40 @@
+{
+  "reviewId": "review-3",
+  "round": 3,
+  "kind": "closure",
+  "target": {
+    "phase": "2-authoring-pipeline",
+    "branch": "feat-2-authoring-pipeline",
+    "baseCommit": "3b9f4d48a01ea39e1addc8066086335e352743c8"
+  },
+  "reviewer": "codex-independent-closure",
+  "createdAt": "2026-07-26T19:08:45+0900",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "title": "입력 변경으로 숨긴 이전 초안이 서버에서 계속 승인 가능하다",
+      "detail": "아직 해결되지 않았다. `AuthoringWizard.invalidateReview`는 현재 draft가 있으면 reject Route Handler로 요청을 시작하지만, `void postJson(...).catch(() => undefined)`로 완료를 기다리지 않고 실패도 무시한 채 즉시 `setDraft(null)` 등으로 UI 상태를 폐기한다. 따라서 reject 요청이 네트워크 오류로 실패하거나 유실되면 `draft-store`의 레코드는 pending 또는 approved로 남는다. pending이면 `approveDraft`가 계속 승인할 수 있고, approved이면 `consumeApprovedDraft`를 통한 register가 계속 가능하다. 요청이 성공하는 경우에도 입력 변경 상태 전이와 서버 reject 완료 사이에 비동기 경쟁 창이 있다. 추가된 컴포넌트 테스트는 reject URL이 호출됐다는 사실만 확인하며, 실패·유실 시 직접 approve가 거절되는지 검증하지 않는다. Route Handler 테스트도 명시적 reject가 성공한 뒤의 차단과 새 draft POST 뒤의 차단만 검사하므로, AC 5의 '입력 변경 직후 새 draft POST 없이 이전 draftId 직접 approve 거절'을 증명하지 않는다. reject 서비스의 세션 소유권 및 rejected draft의 approve/register 차단은 구현됐지만, 서버 폐기가 결정적으로 완료되지 않아 원 finding의 창은 남아 있다.",
+      "evidence": {
+        "files": [
+          "src/components/authoring-wizard.tsx",
+          "src/components/authoring-wizard.test.tsx",
+          "src/services/draft-store.ts",
+          "src/services/draft-store.test.ts",
+          "src/app/api/authoring/drafts/[draftId]/approve/route.ts",
+          "src/app/api/authoring/drafts/[draftId]/reject/route.ts",
+          "src/__tests__/authoring-route.test.ts"
+        ],
+        "spec": [
+          "docs/ARCHITECTURE.md",
+          "phases/2-authoring-pipeline/step8.md",
+          "phases/2-authoring-pipeline-final-fix-c2/step0.md"
+        ]
+      },
+      "suggestedFix": "입력 변경과 서버 초안 폐기를 실패가 숨겨지지 않는 결정적 전이로 결속하고, reject 실패·유실 시 이전 draftId의 approve/register가 서버에서 거절되도록 하라. 새 draft POST 없이 입력 변경 직후 직접 approve를 시도하는 Route Handler 또는 브라우저 회귀 테스트도 추가해야 한다.",
+      "suggestedCategory": "contract_violation",
+      "reviewerConfidence": "high",
+      "closureVerdict": "still-open"
+    }
+  ]
+}
