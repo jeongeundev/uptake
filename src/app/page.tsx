@@ -1,10 +1,16 @@
+import React from "react";
+
 import CatalogBindingsWizard from "@/components/catalog-bindings-wizard";
 import AuthoringWizard from "@/components/authoring-wizard";
+import SurveyWizard from "@/components/survey-wizard";
 
 export default function Home() {
   return (
     <>
       <nav className="mx-auto flex max-w-5xl gap-4 px-6 pt-6 text-sm text-neutral-400">
+        <a className="hover:text-neutral-200" href="#survey">
+          개발 체계 발견
+        </a>
         <a className="hover:text-neutral-200" href="#authoring">
           카탈로그 저작
         </a>
@@ -12,6 +18,9 @@ export default function Home() {
           패턴 이식
         </a>
       </nav>
+      <section id="survey">
+        <SurveyWizard />
+      </section>
       <section id="authoring">
         <AuthoringWizard />
       </section>

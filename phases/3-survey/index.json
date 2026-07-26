@@ -61,7 +61,10 @@
     {
       "step": 7,
       "name": "survey-ui",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-27T02:35:12+0900",
+      "summary": "SURVEY를 제품 첫 화면에 연결하고 후보 근거·폐기 사유·revision·한계와 서버 승인 기반 등재 흐름을 구현했다.",
+      "completed_at": "2026-07-27T02:42:29+0900"
     },
     {
       "step": 8,
