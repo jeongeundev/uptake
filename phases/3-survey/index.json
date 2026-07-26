@@ -1,0 +1,15 @@
+{
+  "project": "uptake",
+  "phase": "3-survey",
+  "steps": [
+    { "step": 0, "name": "survey-rules", "status": "pending" },
+    { "step": 1, "name": "survey-collect", "status": "pending" },
+    { "step": 2, "name": "survey-port", "status": "pending" },
+    { "step": 3, "name": "survey-engine", "status": "pending" },
+    { "step": 4, "name": "survey-adopt", "status": "pending" },
+    { "step": 5, "name": "survey-api", "status": "pending" },
+    { "step": 6, "name": "survey-proposer-adapter", "status": "pending" },
+    { "step": 7, "name": "survey-ui", "status": "pending" },
+    { "step": 8, "name": "survey-e2e", "status": "pending" }
+  ]
+}

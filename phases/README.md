@@ -19,6 +19,7 @@
 | `1-ui-vertical-slice` | UI·API·E2E 수직 슬라이스 |
 | `2-authoring-pipeline` | 저작 파이프라인 (EXTRACT·ABSTRACT) step 0~9 |
 | `2-fix` | `-final` 루프 F-001 해소 — `draft-store` 계약 변경 |
+| `3-survey` | 발견 (SURVEY) — 저장소 1개 → 후보 → `observed`/`descriptive` 등재 step 0~8 |
 
 ## fix phase
 
