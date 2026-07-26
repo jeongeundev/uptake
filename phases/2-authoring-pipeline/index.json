@@ -2,15 +2,58 @@
   "project": "uptake",
   "phase": "2-authoring-pipeline",
   "steps": [
-    { "step": 0, "name": "authoring-contract", "status": "pending" },
-    { "step": 1, "name": "instantiate-role-shape", "status": "pending" },
-    { "step": 2, "name": "source-extract", "status": "pending" },
-    { "step": 3, "name": "abstract-contrast", "status": "pending" },
-    { "step": 4, "name": "oracle-selfverify", "status": "pending" },
-    { "step": 5, "name": "catalog-write", "status": "pending" },
-    { "step": 6, "name": "authoring-api", "status": "pending" },
-    { "step": 7, "name": "proposer-adapter", "status": "pending" },
-    { "step": 8, "name": "authoring-ui", "status": "pending" },
-    { "step": 9, "name": "authoring-e2e", "status": "pending" }
-  ]
+    {
+      "step": 0,
+      "name": "authoring-contract",
+      "status": "completed",
+      "started_at": "2026-07-26T15:51:51+0900",
+      "summary": "저작 도메인 타입, 결정적 proposer 포트·불신 데이터 경계, 호출 기록 가능한 스텁을 테스트와 함께 추가"
+    },
+    {
+      "step": 1,
+      "name": "instantiate-role-shape",
+      "status": "pending"
+    },
+    {
+      "step": 2,
+      "name": "source-extract",
+      "status": "pending"
+    },
+    {
+      "step": 3,
+      "name": "abstract-contrast",
+      "status": "pending"
+    },
+    {
+      "step": 4,
+      "name": "oracle-selfverify",
+      "status": "pending"
+    },
+    {
+      "step": 5,
+      "name": "catalog-write",
+      "status": "pending"
+    },
+    {
+      "step": 6,
+      "name": "authoring-api",
+      "status": "pending"
+    },
+    {
+      "step": 7,
+      "name": "proposer-adapter",
+      "status": "pending"
+    },
+    {
+      "step": 8,
+      "name": "authoring-ui",
+      "status": "pending"
+    },
+    {
+      "step": 9,
+      "name": "authoring-e2e",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-07-26T15:51:51+0900"
 }
