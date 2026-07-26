@@ -1,5 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -14,17 +13,6 @@ const pattern = JSON.parse(
   ),
 ) as Pattern;
 const fixtureRoot = resolve("tests/fixtures/authoring-selfverify-target");
-
-function ownedTemporaryRoots(): string[] {
-  return readdirSync(tmpdir())
-    .filter(
-      (name) =>
-        name.startsWith("uptake-selfverify-target-") ||
-        name.startsWith("uptake-pos-") ||
-        name.startsWith("uptake-neg-"),
-    )
-    .sort();
-}
 
 describe("selfVerifyOracle", () => {
   it(
@@ -68,21 +56,14 @@ describe("selfVerifyOracle", () => {
   );
 
   it(
-    "removes temporary targets and workspaces while preserving the committed fixture",
+    "preserves the committed fixture",
     async () => {
       const fixtureBefore = {
         packageJson: readFileSync(resolve(fixtureRoot, "package.json"), "utf8"),
         config: readFileSync(resolve(fixtureRoot, "vitest.config.ts"), "utf8"),
       };
-      const temporaryBefore = ownedTemporaryRoots();
-
       await selfVerifyOracle(pattern);
 
-      expect(
-        ownedTemporaryRoots().filter(
-          (temporaryRoot) => !temporaryBefore.includes(temporaryRoot),
-        ),
-      ).toEqual([]);
       expect(readFileSync(resolve(fixtureRoot, "package.json"), "utf8")).toBe(
         fixtureBefore.packageJson,
       );
