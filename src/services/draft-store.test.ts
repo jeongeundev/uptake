@@ -5,6 +5,7 @@ import {
   approveDraft,
   consumeApprovedDraft,
   createDraft,
+  rejectDraft,
 } from "@/services/draft-store";
 import type { Pattern } from "@/types/pattern";
 
@@ -73,6 +74,45 @@ describe("draft store", () => {
       reason: "unknown-draft",
     });
     expect(consumeApprovedDraft(draftId, "session-two")).toEqual({
+      ok: false,
+      reason: "unknown-draft",
+    });
+  });
+
+  it("rejects only a pending draft and prevents later approval or consumption", () => {
+    const draftId = createDraft(input);
+
+    expect(rejectDraft(draftId, input.sessionId)).toEqual({ ok: true });
+    expect(approveDraft(draftId, input.sessionId)).toEqual({
+      ok: false,
+      reason: "invalid-state",
+    });
+    expect(consumeApprovedDraft(draftId, input.sessionId)).toEqual({
+      ok: false,
+      reason: "not-approved",
+    });
+    expect(rejectDraft(draftId, input.sessionId)).toEqual({
+      ok: false,
+      reason: "invalid-state",
+    });
+
+    const approvedId = createDraft(input);
+    expect(approveDraft(approvedId, input.sessionId)).toEqual({ ok: true });
+    expect(rejectDraft(approvedId, input.sessionId)).toEqual({
+      ok: false,
+      reason: "invalid-state",
+    });
+
+    const consumedId = createDraft(input);
+    expect(approveDraft(consumedId, input.sessionId)).toEqual({ ok: true });
+    expect(consumeApprovedDraft(consumedId, input.sessionId).ok).toBe(true);
+    expect(rejectDraft(consumedId, input.sessionId)).toEqual({
+      ok: false,
+      reason: "invalid-state",
+    });
+
+    const otherSessionId = createDraft(input);
+    expect(rejectDraft(otherSessionId, "session-two")).toEqual({
       ok: false,
       reason: "unknown-draft",
     });

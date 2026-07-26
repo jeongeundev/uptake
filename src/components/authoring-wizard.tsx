@@ -436,6 +436,31 @@ export default function AuthoringWizard() {
     setBusy(false);
   }
 
+  async function reject() {
+    if (!draft) return;
+    setBusy(true);
+    const response = (await postJson(
+      `/api/authoring/drafts/${draft.draftId}/reject`,
+      {},
+    )) as { status: string; detail?: string };
+    if (response.status === "rejected") {
+      setDraft(null);
+      setApproved(false);
+      setRegistration(null);
+      setError({
+        status: "draft-rejected",
+        detail:
+          "초안을 거부했습니다. 후보 편집 없이 새 초안을 요청할 수 있습니다.",
+      });
+    } else {
+      setError({
+        status: response.status,
+        detail: response.detail ?? "초안 거부가 거절되었습니다.",
+      });
+    }
+    setBusy(false);
+  }
+
   return (
     <div className="mx-auto max-w-5xl space-y-8 px-6 py-12 text-white">
       <header>
@@ -449,13 +474,22 @@ export default function AuthoringWizard() {
       <form className="space-y-6" onSubmit={submit}>
         <Section title="1. 입력">
           <div className="grid gap-4 sm:grid-cols-2">
-            <TextInput label="patternId" onChange={setPatternId} value={patternId} />
-            <TextInput label="name" onChange={setName} value={name} />
+            <TextInput label="patternId" onChange={(value) => {
+              setPatternId(value);
+              invalidateReview();
+            }} value={patternId} />
+            <TextInput label="name" onChange={(value) => {
+              setName(value);
+              invalidateReview();
+            }} value={name} />
             <label className="text-sm text-neutral-300 sm:col-span-2">
               intent
               <textarea
                 className="mt-1 block w-full rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
-                onChange={(event) => setIntent(event.target.value)}
+                onChange={(event) => {
+                  setIntent(event.target.value);
+                  invalidateReview();
+                }}
                 required
                 value={intent}
               />
@@ -464,9 +498,10 @@ export default function AuthoringWizard() {
               capability
               <select
                 className="mt-1 block w-full rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
-                onChange={(event) =>
+                onChange={(event) => {
                   setCapability(event.target.value as Pattern["capability"])
-                }
+                  invalidateReview();
+                }}
                 value={capability}
               >
                 <option value="descriptive">descriptive</option>
@@ -477,9 +512,10 @@ export default function AuthoringWizard() {
               evidenceStatus
               <select
                 className="mt-1 block w-full rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
-                onChange={(event) =>
+                onChange={(event) => {
                   setEvidenceStatus(event.target.value as Pattern["evidenceStatus"])
-                }
+                  invalidateReview();
+                }}
                 value={evidenceStatus}
               >
                 <option value="observed">observed</option>
@@ -530,11 +566,17 @@ export default function AuthoringWizard() {
             ))}
           </div>
           <div className="mt-4 flex gap-4">
-            <button className="text-sm text-neutral-500 hover:text-neutral-300" onClick={() => setSources((current) => [...current, emptySource()])} type="button">
+            <button className="text-sm text-neutral-500 hover:text-neutral-300" onClick={() => {
+              setSources((current) => [...current, emptySource()]);
+              invalidateReview();
+            }} type="button">
               소스 추가
             </button>
             {sources.length > 1 && (
-              <button className="text-sm text-neutral-500 hover:text-neutral-300" onClick={() => setSources((current) => current.slice(0, -1))} type="button">
+              <button className="text-sm text-neutral-500 hover:text-neutral-300" onClick={() => {
+                setSources((current) => current.slice(0, -1));
+                invalidateReview();
+              }} type="button">
                 마지막 소스 제거
               </button>
             )}
@@ -562,13 +604,7 @@ export default function AuthoringWizard() {
             approving={busy}
             draft={draft}
             onApprove={approve}
-            onReject={() => {
-              setDraft(null);
-              setError({
-                status: "draft-rejected",
-                detail: "초안을 거부했습니다. 후보 편집 없이 새 초안을 요청할 수 있습니다.",
-              });
-            }}
+            onReject={reject}
           />
           <RegistrationButton
             approved={approved}

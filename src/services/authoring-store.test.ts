@@ -25,6 +25,7 @@ import {
   __resetAuthoringStoreForTests,
   approveAuthoringDraft,
   createAuthoringDraft,
+  rejectAuthoringDraft,
   registerAuthoringDraft,
 } from "./authoring-store";
 
@@ -182,6 +183,29 @@ describe("authoring store", () => {
     expect(
       registerAuthoringDraft("session-one", created.draftId),
     ).toMatchObject({ status: "registered" });
+    expect(
+      registerAuthoringDraft("session-one", created.draftId),
+    ).toMatchObject({ status: "not-approved" });
+  });
+
+  it("rejects a pending draft and blocks its approval and registration", async () => {
+    const created = await createAuthoringDraft(
+      "session-one",
+      request(),
+      proposer(),
+    );
+    expect(created.status).toBe("drafted");
+    if (created.status !== "drafted") return;
+
+    expect(
+      rejectAuthoringDraft("session-two", created.draftId),
+    ).toMatchObject({ status: "draft-not-found" });
+    expect(
+      rejectAuthoringDraft("session-one", created.draftId),
+    ).toEqual({ status: "rejected" });
+    expect(
+      approveAuthoringDraft("session-one", created.draftId),
+    ).toMatchObject({ status: "draft-not-found" });
     expect(
       registerAuthoringDraft("session-one", created.draftId),
     ).toMatchObject({ status: "not-approved" });

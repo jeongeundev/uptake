@@ -7,7 +7,7 @@ export type StoredDraft = {
   sessionId: string;
   pattern: Pattern;
   proposerMetadata: ProposerMetadata;
-  status: "pending" | "approved" | "consumed";
+  status: "pending" | "approved" | "consumed" | "rejected";
 };
 
 const drafts = new Map<string, StoredDraft>();
@@ -37,6 +37,21 @@ export function approveDraft(
   return { ok: true };
 }
 
+export function rejectDraft(
+  draftId: string,
+  sessionId: string,
+): { ok: true } | { ok: false; reason: "unknown-draft" | "invalid-state" } {
+  const draft = drafts.get(draftId);
+  if (draft === undefined || draft.sessionId !== sessionId) {
+    return { ok: false, reason: "unknown-draft" };
+  }
+  if (draft.status !== "pending") {
+    return { ok: false, reason: "invalid-state" };
+  }
+  draft.status = "rejected";
+  return { ok: true };
+}
+
 export function consumeApprovedDraft(
   draftId: string,
   sessionId: string,
@@ -50,7 +65,7 @@ export function consumeApprovedDraft(
   if (draft === undefined || draft.sessionId !== sessionId) {
     return { ok: false, reason: "unknown-draft" };
   }
-  if (draft.status === "pending") {
+  if (draft.status === "pending" || draft.status === "rejected") {
     return { ok: false, reason: "not-approved" };
   }
   if (draft.status === "consumed") {

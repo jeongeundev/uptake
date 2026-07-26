@@ -1,14 +1,23 @@
+// @vitest-environment jsdom
+
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   approveAndRegisterDraft,
+  default as AuthoringWizard,
   DraftReview,
   RegistrationButton,
   RegistrationResultView,
   type DraftedResponse,
 } from "@/components/authoring-wizard";
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const draft: DraftedResponse = {
   status: "drafted",
@@ -78,7 +87,125 @@ const draft: DraftedResponse = {
   proposer: { providerId: "stub", modelId: "deterministic" },
 };
 
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function fillValidRequest(): void {
+  fireEvent.change(screen.getByLabelText("patternId"), {
+    target: { value: "observed-loop" },
+  });
+  fireEvent.change(screen.getByLabelText("name"), {
+    target: { value: "Observed loop" },
+  });
+  fireEvent.change(screen.getByLabelText("intent"), {
+    target: { value: "Observe a loop" },
+  });
+  fireEvent.change(screen.getByLabelText("repository"), {
+    target: { value: "example/one" },
+  });
+  fireEvent.change(screen.getByLabelText("stack"), {
+    target: { value: "php/pest" },
+  });
+  fireEvent.change(screen.getByLabelText("independenceGroup"), {
+    target: { value: "group-one" },
+  });
+  fireEvent.change(screen.getByLabelText("independenceNote"), {
+    target: { value: "Independent maintainer." },
+  });
+  fireEvent.change(screen.getByLabelText("isTargetStack"), {
+    target: { value: "false" },
+  });
+}
+
+async function createDraftThroughWizard(
+  request: ReturnType<typeof vi.fn>,
+): Promise<void> {
+  vi.stubGlobal("fetch", request);
+  render(<AuthoringWizard />);
+  fillValidRequest();
+  fireEvent.click(screen.getByRole("button", { name: "초안 생성" }));
+  await screen.findByLabelText("저작 초안 검토");
+}
+
 describe("AuthoringWizard", () => {
+  it("creates, reviews, approves, and registers a draft through fetch-backed controls", async () => {
+    const request = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/approve")) return jsonResponse({ status: "approved" });
+      if (url.endsWith("/register")) {
+        return jsonResponse({
+          status: "registered",
+          path: "catalog/observed-loop.json",
+        });
+      }
+      return jsonResponse(draft);
+    });
+
+    await createDraftThroughWizard(request);
+
+    expect(screen.getByText("Checks the specification.")).toBeTruthy();
+    expect(screen.getByText(/tests\/spec\.php/)).toBeTruthy();
+    expect(screen.getByText(/distinct 2/)).toBeTruthy();
+    expect(screen.getByText(/missing\.md/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "초안 승인" }));
+    await screen.findByRole("button", { name: "서버 승인 완료" });
+    fireEvent.click(screen.getByRole("button", { name: "카탈로그 등재" }));
+    await screen.findByText("카탈로그에 등재되었습니다.");
+
+    expect(request.mock.calls.map(([input]) => String(input))).toEqual([
+      "/api/authoring/drafts",
+      "/api/authoring/drafts/draft-1/approve",
+      "/api/authoring/drafts/draft-1/register",
+    ]);
+  });
+
+  it("removes stale review and registration controls when any request input or source list changes", async () => {
+    const request = vi.fn(async () => jsonResponse(draft));
+    await createDraftThroughWizard(request);
+
+    fireEvent.change(screen.getByLabelText("name"), {
+      target: { value: "Changed name" },
+    });
+    expect(screen.queryByLabelText("저작 초안 검토")).toBeNull();
+    expect(screen.queryByRole("button", { name: "카탈로그 등재" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "초안 생성" }));
+    await screen.findByLabelText("저작 초안 검토");
+    fireEvent.click(screen.getByRole("button", { name: "소스 추가" }));
+    expect(screen.queryByLabelText("저작 초안 검토")).toBeNull();
+    expect(screen.queryByRole("button", { name: "카탈로그 등재" })).toBeNull();
+  });
+
+  it("keeps the draft visible until reject succeeds, then removes its controls", async () => {
+    let finishReject: ((response: Response) => void) | undefined;
+    const request = vi.fn(
+      (input: RequestInfo | URL): Promise<Response> => {
+        if (String(input).endsWith("/reject")) {
+          return new Promise((resolve) => {
+            finishReject = resolve;
+          });
+        }
+        return Promise.resolve(jsonResponse(draft));
+      },
+    );
+    await createDraftThroughWizard(request);
+
+    fireEvent.click(screen.getByRole("button", { name: "초안 거부" }));
+    expect(screen.getByLabelText("저작 초안 검토")).toBeTruthy();
+    expect(finishReject).toBeTypeOf("function");
+
+    finishReject?.(jsonResponse({ status: "rejected" }));
+    await waitFor(() =>
+      expect(screen.queryByLabelText("저작 초안 검토")).toBeNull(),
+    );
+    expect(screen.queryByRole("button", { name: "초안 승인" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "카탈로그 등재" })).toBeNull();
+  });
+
   it("shows the draft evidence, corroboration calculation, demotion, and discarded candidates", () => {
     const markup = renderToStaticMarkup(
       <DraftReview approved={false} draft={draft} onApprove={() => undefined} />,

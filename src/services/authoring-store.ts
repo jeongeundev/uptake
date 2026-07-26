@@ -10,6 +10,7 @@ import {
   approveDraft,
   consumeApprovedDraft,
   createDraft,
+  rejectDraft,
   __resetDraftStoreForTests,
 } from "@/services/draft-store";
 import type { Proposer, ProposerMetadata } from "@/services/proposer";
@@ -214,6 +215,23 @@ export function approveAuthoringDraft(
     };
   }
   return { status: "approved" };
+}
+
+export function rejectAuthoringDraft(
+  sessionId: string,
+  draftId: string,
+): { status: "rejected" } | AuthoringError {
+  const result = rejectDraft(draftId, sessionId);
+  if (!result.ok) {
+    return {
+      status: "draft-not-found",
+      detail:
+        result.reason === "unknown-draft"
+          ? "draft was not found"
+          : "draft is not pending",
+    };
+  }
+  return { status: "rejected" };
 }
 
 export function registerAuthoringDraft(

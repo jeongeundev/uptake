@@ -8,11 +8,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __setAuthoringProposerForTests } from "@/app/api/authoring/proposer";
 import { POST as createDraft } from "@/app/api/authoring/drafts/route";
 import { POST as approveDraft } from "@/app/api/authoring/drafts/[draftId]/approve/route";
+import { POST as registerDraft } from "@/app/api/authoring/drafts/[draftId]/register/route";
+import { POST as rejectDraft } from "@/app/api/authoring/drafts/[draftId]/reject/route";
 import {
   AnthropicProposerConfigurationError,
   createAnthropicProposerFromEnv,
 } from "@/services/proposer-anthropic";
-import { __resetAuthoringStoreForTests } from "@/services/authoring-store";
+import {
+  __resetAuthoringStoreForTests,
+  createAuthoringDraft,
+} from "@/services/authoring-store";
 import { createStubProposer } from "@/services/proposer-stub";
 
 vi.mock("@/services/proposer-anthropic", async (importOriginal) => {
@@ -222,5 +227,58 @@ describe("authoring route boundary", () => {
     expect(await response.json()).toMatchObject({
       status: "draft-not-found",
     });
+  });
+
+  it("rejects a session-owned pending draft and blocks later approval and registration", async () => {
+    const proposer = createStubProposer({
+      fileCandidates: ({ sourceId }) => [
+        {
+          sourceId,
+          path: "method.md",
+          roleId: "method",
+          rationale: "fixture",
+        },
+      ],
+      contrast: {
+        roles: [{ id: "method", description: "Observed method." }],
+        bindingPoints: [],
+      },
+    });
+    const created = await createAuthoringDraft(
+      "session-one",
+      {
+        patternId: "rejected-method",
+        name: "Rejected method",
+        intent: "Observe method",
+        capability: "descriptive",
+        evidenceStatus: "observed",
+        sources: [
+          {
+            id: "one",
+            repository: "example/one",
+            stack: "php",
+            isTargetStack: false,
+            independenceGroup: "one",
+            independenceNote: "Independent.",
+          },
+        ],
+      },
+      proposer,
+    );
+    expect(created.status).toBe("drafted");
+    if (created.status !== "drafted") return;
+    const context = { params: Promise.resolve({ draftId: created.draftId }) };
+    const request = () =>
+      new NextRequest("http://localhost/api/authoring/drafts/id", {
+        method: "POST",
+        headers: { cookie: "uptake-session=session-one" },
+      });
+
+    const rejected = await rejectDraft(request(), context);
+    expect(rejected.status).toBe(200);
+    expect(await rejected.json()).toEqual({ status: "rejected" });
+
+    expect((await approveDraft(request(), context)).status).toBe(404);
+    expect((await registerDraft(request(), context)).status).toBe(400);
   });
 });
