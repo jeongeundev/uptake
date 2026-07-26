@@ -7,7 +7,8 @@
       "name": "authoring-contract",
       "status": "completed",
       "started_at": "2026-07-26T15:51:51+0900",
-      "summary": "저작 도메인 타입, 결정적 proposer 포트·불신 데이터 경계, 호출 기록 가능한 스텁을 테스트와 함께 추가"
+      "summary": "저작 도메인 타입, 결정적 proposer 포트·불신 데이터 경계, 호출 기록 가능한 스텁을 테스트와 함께 추가",
+      "completed_at": "2026-07-26T15:57:34+0900"
     },
     {
       "step": 1,
