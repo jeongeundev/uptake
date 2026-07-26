@@ -54,7 +54,7 @@ function gitOutput(repositoryRoot: string, args: string[]): string | undefined {
   }
 }
 
-function observeTargetStack(
+export function observeTargetStack(
   source: Source,
   sourceRoot: string | undefined,
 ): TargetStackFact {
@@ -91,11 +91,10 @@ function observeTargetStack(
   };
 }
 
-export async function extractEvidence(
+function resolveSources(
   request: AuthoringRequest,
-  proposer: Proposer,
   sourceRoot?: string,
-): Promise<ExtractResult> {
+): ExtractResult | ResolvedSource[] {
   const resolvedSources: ResolvedSource[] = [];
   for (const sourceSpec of request.sources) {
     const repositoryRoot = resolveRepositoryRoot(
@@ -135,27 +134,19 @@ export async function extractEvidence(
       files: files === "" ? [] : files.split("\n").sort(),
     });
   }
+  return resolvedSources;
+}
 
-  const proposals: FileCandidate[] = [];
-  for (const { source, files } of resolvedSources) {
-    proposals.push(
-      ...(await proposer.proposeFileCandidates({
-        intent: request.intent,
-        sourceId: source.id,
-        repository: source.repository,
-        revision: source.revision,
-        files,
-        // Empty means unrestricted roles for descriptive authoring.
-        roleIds:
-          request.capability === "generative" ? ANCHOR_ROLE_IDS : [],
-      })),
-    );
-  }
-
+function extractResolvedCandidates(
+  request: AuthoringRequest,
+  resolvedSources: ResolvedSource[],
+  candidates: FileCandidate[],
+  sourceRoot?: string,
+): ExtractResult {
   const sourceOrder = new Map(
     request.sources.map((source, index) => [source.id, index]),
   );
-  proposals.sort(
+  candidates.sort(
     (left, right) =>
       (sourceOrder.get(left.sourceId) ?? Number.MAX_SAFE_INTEGER) -
         (sourceOrder.get(right.sourceId) ?? Number.MAX_SAFE_INTEGER) ||
@@ -171,7 +162,7 @@ export async function extractEvidence(
   const evidence: Evidence[] = [];
   const discarded: DiscardedCandidate[] = [];
 
-  for (const candidate of proposals) {
+  for (const candidate of candidates) {
     const source = sourceById.get(candidate.sourceId);
     let reason: DiscardedCandidate["reason"] | undefined;
     if (source === undefined || !isRelativePosixPath(candidate.path)) {
@@ -241,4 +232,55 @@ export async function extractEvidence(
       observeTargetStack(source, sourceRoot),
     ),
   };
+}
+
+export async function extractFromCandidates(
+  request: AuthoringRequest,
+  candidates: FileCandidate[],
+  sourceRoot?: string,
+): Promise<ExtractResult> {
+  const resolvedSources = resolveSources(request, sourceRoot);
+  if (!Array.isArray(resolvedSources)) {
+    return resolvedSources;
+  }
+  return extractResolvedCandidates(
+    request,
+    resolvedSources,
+    candidates,
+    sourceRoot,
+  );
+}
+
+export async function extractEvidence(
+  request: AuthoringRequest,
+  proposer: Proposer,
+  sourceRoot?: string,
+): Promise<ExtractResult> {
+  const resolvedSources = resolveSources(request, sourceRoot);
+  if (!Array.isArray(resolvedSources)) {
+    return resolvedSources;
+  }
+
+  const proposals: FileCandidate[] = [];
+  for (const { source, files } of resolvedSources) {
+    proposals.push(
+      ...(await proposer.proposeFileCandidates({
+        intent: request.intent,
+        sourceId: source.id,
+        repository: source.repository,
+        revision: source.revision,
+        files,
+        // Empty means unrestricted roles for descriptive authoring.
+        roleIds:
+          request.capability === "generative" ? ANCHOR_ROLE_IDS : [],
+      })),
+    );
+  }
+
+  return extractResolvedCandidates(
+    request,
+    resolvedSources,
+    proposals,
+    sourceRoot,
+  );
 }
