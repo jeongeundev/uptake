@@ -14,3 +14,15 @@ export type CompiledSurveyRules = {
   exclude: RegExp[];
   rules: { id: string; include: RegExp[] }[];
 };
+
+export type SurveyConfidence = "high" | "medium" | "low";
+
+export type SurveyCandidate = {
+  id: string;
+  name: string;
+  intent: string;
+  discipline: string;
+  tradeoffs: string;
+  evidence: string[];
+  confidence: SurveyConfidence;
+};

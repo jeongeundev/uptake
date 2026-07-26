@@ -21,7 +21,10 @@
     {
       "step": 2,
       "name": "survey-port",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-27T02:08:34+0900",
+      "summary": "SURVEY 후보 타입과 별도 proposer 포트, 적대적 후보를 그대로 전달하는 결정적 스텁을 추가했다.",
+      "completed_at": "2026-07-27T02:10:26+0900"
     },
     {
       "step": 3,
