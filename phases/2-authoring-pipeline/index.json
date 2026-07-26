@@ -1,0 +1,16 @@
+{
+  "project": "uptake",
+  "phase": "2-authoring-pipeline",
+  "steps": [
+    { "step": 0, "name": "authoring-contract", "status": "pending" },
+    { "step": 1, "name": "instantiate-role-shape", "status": "pending" },
+    { "step": 2, "name": "source-extract", "status": "pending" },
+    { "step": 3, "name": "abstract-contrast", "status": "pending" },
+    { "step": 4, "name": "oracle-selfverify", "status": "pending" },
+    { "step": 5, "name": "catalog-write", "status": "pending" },
+    { "step": 6, "name": "authoring-api", "status": "pending" },
+    { "step": 7, "name": "proposer-adapter", "status": "pending" },
+    { "step": 8, "name": "authoring-ui", "status": "pending" },
+    { "step": 9, "name": "authoring-e2e", "status": "pending" }
+  ]
+}
