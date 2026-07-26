@@ -7,7 +7,10 @@ import {
   statusCode,
 } from "@/app/api/http";
 import { configuredSurveyProposer } from "@/app/api/survey/proposer";
-import { AnthropicProposerConfigurationError } from "@/services/proposer-anthropic";
+import {
+  AnthropicProposerConfigurationError,
+  AnthropicProposerResponseError,
+} from "@/services/proposer-anthropic";
 import { runSurvey } from "@/services/survey-service";
 
 export const runtime = "nodejs";
@@ -41,7 +44,18 @@ export async function POST(request: NextRequest) {
       400,
     );
   }
-  const result = await runSurvey(sessionId, body.repository, proposer);
+  let result;
+  try {
+    result = await runSurvey(sessionId, body.repository, proposer);
+  } catch (error) {
+    if (!(error instanceof AnthropicProposerResponseError)) throw error;
+    return jsonWithSession(
+      request,
+      sessionId,
+      { status: "proposer-response-error", detail: error.message },
+      502,
+    );
+  }
   return jsonWithSession(
     request,
     sessionId,

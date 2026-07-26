@@ -154,6 +154,12 @@ describe("createAnthropicProposer", () => {
     await expect(proposer.proposeFileCandidates(fileRequest)).rejects.toThrow(
       "invalid Anthropic proposer response after 3 attempts",
     );
+    await expect(
+      createAnthropicProposer({
+        modelId: "configured-model",
+        client: fakeClient(["bad", "bad", "bad"]).client,
+      }).proposeSurveyCandidates(surveyRequest),
+    ).rejects.toMatchObject({ name: "AnthropicProposerResponseError" });
     expect(fake.requests).toHaveLength(3);
   });
 

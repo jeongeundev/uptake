@@ -19,6 +19,7 @@ import { POST as runSurvey } from "@/app/api/survey/route";
 import { POST as adoptCandidate } from "@/app/api/survey/[surveyId]/candidates/[candidateId]/adopt/route";
 import { __resetAuthoringStoreForTests } from "@/services/authoring-store";
 import { createStubSurveyProposer } from "@/services/proposer-stub";
+import { AnthropicProposerResponseError } from "@/services/proposer-anthropic";
 import { __resetSurveyStoreForTests } from "@/services/survey-store";
 import type { SurveyCandidate } from "@/types/survey";
 
@@ -155,6 +156,51 @@ describe("survey route boundary", () => {
     ]);
   });
 
+  it("preserves discard details when every candidate is discarded", async () => {
+    const { result } = await surveyed([
+      { ...candidate, evidence: ["invented.md"] },
+    ]);
+    expect(result).toMatchObject({
+      status: "no-candidate",
+      repository: "example/one",
+      revision: expect.any(String),
+      discardedEvidence: [
+        {
+          candidateId: candidate.id,
+          path: "invented.md",
+          reason: "not-collected",
+        },
+      ],
+      discardedCandidates: [
+        {
+          candidateId: candidate.id,
+          reason: "no-evidence",
+        },
+      ],
+    });
+  });
+
+  it("returns a structured proposer response error", async () => {
+    __setSurveyProposerForTests({
+      metadata: { provider: "anthropic", modelId: "configured-model" },
+      proposeSurveyCandidates: async () => {
+        throw new AnthropicProposerResponseError(
+          "invalid Anthropic proposer response after 3 attempts",
+        );
+      },
+    });
+
+    const response = await runSurvey(
+      surveyRequest({ repository: "example/one" }),
+    );
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({
+      status: "proposer-response-error",
+      detail: "invalid Anthropic proposer response after 3 attempts",
+    });
+  });
+
   it("does not allow another session to adopt a survey", async () => {
     const { result } = await surveyed();
     const response = await adoptCandidate(
@@ -263,7 +309,11 @@ describe("survey route boundary", () => {
         body: JSON.stringify({ request: adopted.authoringRequest }),
       });
 
-    expect((await approveDraft(actionRequest(), context)).status).toBe(200);
+    const approved = await approveDraft(actionRequest(), context);
+    const approvedBody = await approved.json();
+    if (approved.status !== 200) {
+      throw new Error(JSON.stringify(approvedBody));
+    }
     const registered = await registerDraft(actionRequest(), context);
     expect(registered.status).toBe(200);
     expect(existsSync(join(catalogDir, `${candidate.id}.json`))).toBe(true);

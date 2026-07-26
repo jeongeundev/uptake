@@ -295,6 +295,24 @@ describe("surveyRepository", () => {
     ).resolves.toMatchObject({
       ok: false,
       reason: "no-candidate",
+      repository,
+      revision: expect.any(String),
+      collected: [
+        expect.objectContaining({ path: "docs/method.md" }),
+      ],
+      discardedEvidence: [
+        {
+          candidateId: "no-grounding",
+          path: "invented.md",
+          reason: "not-collected",
+        },
+      ],
+      discardedCandidates: [
+        {
+          candidateId: "no-grounding",
+          reason: "no-evidence",
+        },
+      ],
     });
   });
 

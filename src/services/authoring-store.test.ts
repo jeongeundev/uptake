@@ -25,9 +25,24 @@ import {
   __resetAuthoringStoreForTests,
   approveAuthoringDraft as approveStoredAuthoringDraft,
   createAuthoringDraft,
+  isAuthoringRequest,
   rejectAuthoringDraft,
   registerAuthoringDraft as registerStoredAuthoringDraft,
 } from "./authoring-store";
+
+it("accepts a repository identifier as an independence group", () => {
+  const value = request({
+    evidenceStatus: "observed",
+    sources: [
+      {
+        ...request().sources[0],
+        independenceGroup: "fixtures/a/b",
+      },
+    ],
+  });
+
+  expect(isAuthoringRequest(value)).toBe(true);
+});
 
 let root: string;
 let sourceRoot: string;

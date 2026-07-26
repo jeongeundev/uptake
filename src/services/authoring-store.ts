@@ -113,7 +113,7 @@ export function isAuthoringRequest(value: unknown): value is AuthoringRequest {
       !isRelativePosixPath(source.repository) ||
       !nonEmpty(source.stack) ||
       typeof source.isTargetStack !== "boolean" ||
-      !isId(source.independenceGroup) ||
+      !nonEmpty(source.independenceGroup) ||
       !nonEmpty(source.independenceNote)
     ) {
       return false;

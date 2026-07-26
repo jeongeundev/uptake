@@ -172,6 +172,80 @@ describe("SurveyWizard", () => {
     expect(screen.getByText("budget-exhausted")).toBeTruthy();
   });
 
+  it("shows no-candidate discard details and enables investigation again", async () => {
+    const response = {
+      status: "no-candidate",
+      detail: "No proposed SURVEY candidate retained collected evidence.",
+      repository: "example/one",
+      revision: "abc123",
+      collected: [],
+      skipped: [
+        {
+          path: "docs/large.md",
+          ruleId: "documentation",
+          reason: "budget-exhausted",
+        },
+      ],
+      discardedEvidence: [
+        {
+          candidateId: "ungrounded",
+          path: "invented.md",
+          reason: "not-collected",
+        },
+      ],
+      discardedCandidates: [
+        {
+          candidateId: "ungrounded",
+          reason: "no-evidence",
+          detail: "Candidate has no collected evidence.",
+        },
+      ],
+    };
+    const request = vi.fn(async () => jsonResponse(response));
+    vi.stubGlobal("fetch", request);
+    render(<SurveyWizard />);
+    fireEvent.change(screen.getByLabelText("저장소 식별자"), {
+      target: { value: "example/one" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "조사" }));
+
+    expect(await screen.findByText("abc123")).toBeTruthy();
+    expect(screen.getByText(/ungrounded · invented\.md/)).toBeTruthy();
+    expect(screen.getByText(/ungrounded · no-evidence/)).toBeTruthy();
+    expect(screen.getByText(/documentation · docs\/large\.md/)).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: "조사" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+  });
+
+  it("shows network and JSON errors and always enables investigation again", async () => {
+    const request = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("network unavailable"))
+      .mockResolvedValueOnce(new Response("not-json"));
+    vi.stubGlobal("fetch", request);
+    render(<SurveyWizard />);
+    fireEvent.change(screen.getByLabelText("저장소 식별자"), {
+      target: { value: "example/one" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "조사" }));
+    expect(await screen.findByText("network-error")).toBeTruthy();
+    expect(screen.getByText("network unavailable")).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: "조사" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "조사" }));
+    expect(await screen.findByText("invalid-json")).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: "조사" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+  });
+
   it("adopts the selected candidate and renders the server-assembled draft", async () => {
     const request = vi.fn(async (input: RequestInfo | URL) =>
       jsonResponse(String(input).endsWith("/adopt") ? adopted : surveyed),

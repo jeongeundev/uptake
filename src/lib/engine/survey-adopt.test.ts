@@ -112,7 +112,7 @@ describe("adoptSurveyCandidate", () => {
             repository,
             stack: "js/ts+vitest",
             isTargetStack: true,
-            independenceGroup: "github-com-pytest-dev-pytest",
+            independenceGroup: repository,
           },
         ],
       },

@@ -34,6 +34,13 @@ export class AnthropicProposerConfigurationError extends Error {
   }
 }
 
+export class AnthropicProposerResponseError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "AnthropicProposerResponseError";
+  }
+}
+
 const systemPrompt = [
   "You propose observations about development methodology in supplied repositories.",
   "Describe what the repositories actually do; do not prescribe a correct practice.",
@@ -303,9 +310,10 @@ async function requestStructured<T>(
       lastError = error;
     }
   }
-  throw new Error("invalid Anthropic proposer response after 3 attempts", {
-    cause: lastError,
-  });
+  throw new AnthropicProposerResponseError(
+    "invalid Anthropic proposer response after 3 attempts",
+    { cause: lastError },
+  );
 }
 
 function requestBlock(label: string, value: unknown): string {

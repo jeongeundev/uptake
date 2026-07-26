@@ -33,6 +33,13 @@ type SurveyedResponse = {
     detail: string;
   }[];
 };
+type NoCandidateResponse = Omit<
+  SurveyedResponse,
+  "status" | "surveyId" | "candidates"
+> & {
+  status: "no-candidate";
+  detail: string;
+};
 type AdoptedResponse = {
   status: "drafted";
   draftId: string;
@@ -171,12 +178,37 @@ export default function SurveyWizard() {
     setDraft(null);
     setServerApproved(false);
     setRegistration(null);
-    const response = (await postJson("/api/survey", {
-      repository,
-    })) as SurveyedResponse | ErrorResponse;
-    if ("surveyId" in response) setSurvey(response);
-    else setError(response);
-    setBusy(false);
+    try {
+      const response = (await postJson("/api/survey", {
+        repository,
+      })) as SurveyedResponse | NoCandidateResponse | ErrorResponse;
+      if ("surveyId" in response) {
+        setSurvey(response);
+      } else if (
+        response.status === "no-candidate" &&
+        "revision" in response
+      ) {
+        setSurvey({
+          ...response,
+          status: "surveyed",
+          surveyId: "",
+          candidates: [],
+        });
+        setError({ status: response.status, detail: response.detail });
+      } else {
+        setError(response);
+      }
+    } catch (caught) {
+      setError({
+        status: caught instanceof SyntaxError ? "invalid-json" : "network-error",
+        detail:
+          caught instanceof Error
+            ? caught.message
+            : "SURVEY 요청을 처리하지 못했습니다.",
+      });
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function adopt() {

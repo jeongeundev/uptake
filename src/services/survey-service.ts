@@ -35,6 +35,16 @@ export type SurveyError = {
     | "no-candidate"
     | "adoption-failed";
   detail: string;
+  repository?: string;
+  revision?: string;
+  collected?: { path: string; ruleId: string; truncated: boolean }[];
+  skipped?: {
+    path: string;
+    ruleId: string;
+    reason: "budget-exhausted" | "unreadable";
+  }[];
+  discardedEvidence?: DiscardedEvidence[];
+  discardedCandidates?: DiscardedSurveyCandidate[];
 };
 
 export type SurveyedResponse = {
@@ -86,7 +96,18 @@ export async function runSurvey(
     sourceRoot(),
   );
   if (!surveyed.ok) {
-    return { status: surveyed.reason, detail: surveyed.detail };
+    return surveyed.reason === "no-candidate"
+      ? {
+          status: surveyed.reason,
+          detail: surveyed.detail,
+          repository: surveyed.repository,
+          revision: surveyed.revision,
+          collected: surveyed.collected,
+          skipped: surveyed.skipped,
+          discardedEvidence: surveyed.discardedEvidence,
+          discardedCandidates: surveyed.discardedCandidates,
+        }
+      : { status: surveyed.reason, detail: surveyed.detail };
   }
   const surveyId = createSurvey({
     sessionId,

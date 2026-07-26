@@ -107,7 +107,7 @@ export async function adoptSurveyCandidate(
         repository: input.repository,
         stack: "unspecified",
         isTargetStack: false,
-        independenceGroup: sourceId,
+        independenceGroup: input.repository,
         independenceNote: INDEPENDENCE_NOTE,
       },
     ],

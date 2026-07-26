@@ -40,9 +40,19 @@ export type SurveyResult =
       reason:
         | "repository-unresolved"
         | "revision-unpinnable"
-        | "no-signal"
-        | "no-candidate";
+        | "no-signal";
       detail: string;
+    }
+  | {
+      ok: false;
+      reason: "no-candidate";
+      detail: string;
+      repository: string;
+      revision: string;
+      collected: { path: string; ruleId: string; truncated: boolean }[];
+      skipped: SkippedSignal[];
+      discardedEvidence: DiscardedEvidence[];
+      discardedCandidates: DiscardedSurveyCandidate[];
     };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -153,10 +163,28 @@ export async function surveyRepository(
   }
 
   if (candidates.length === 0) {
+    discardedEvidence.sort(
+      (left, right) =>
+        compareText(left.candidateId, right.candidateId) ||
+        compareText(left.path, right.path),
+    );
+    discardedCandidates.sort((left, right) =>
+      compareText(left.candidateId, right.candidateId),
+    );
     return {
       ok: false,
       reason: "no-candidate",
       detail: "No proposed SURVEY candidate retained collected evidence.",
+      repository,
+      revision: collected.revision,
+      collected: collected.files.map(({ path, ruleId, truncated }) => ({
+        path,
+        ruleId,
+        truncated,
+      })),
+      skipped: collected.skipped,
+      discardedEvidence,
+      discardedCandidates,
     };
   }
 

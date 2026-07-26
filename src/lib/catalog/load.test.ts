@@ -313,6 +313,20 @@ describe("loadCatalog", () => {
     expect(rejectionReason(fixture)).toBe("evidence-invalid");
   });
 
+  it("accepts repository identifiers as independence groups", () => {
+    writePattern(fixture, {
+      ...fixture.pattern,
+      sources: fixture.pattern.sources.map((source, index) => ({
+        ...source,
+        independenceGroup: `fixtures/${index + 1}/repo`,
+      })),
+    });
+
+    expect(loadCatalog(fixture.catalogDir, fixture.sourceRoot).loaded).toHaveLength(
+      1,
+    );
+  });
+
   it("rejects corroborated evidence without a non-target stack", () => {
     writePattern(fixture, {
       ...fixture.pattern,
