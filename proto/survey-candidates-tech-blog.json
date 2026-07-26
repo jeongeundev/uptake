@@ -1,0 +1,36 @@
+{
+  "candidates": [
+    {
+      "id": "pre-commit-format-and-lint-gate",
+      "intent": "Every commit lands already linted and formatted so style never has to be discussed after the fact.",
+      "discipline": "A Husky pre-commit hook runs `npx --no-install lint-staged` before each commit. The lint-staged block in package.json auto-fixes staged `*.{js,jsx,ts,tsx}` via `yarn eslint --fix` and rewrites staged `*.{js,jsx,ts,tsx,json,css,md,mdx}` via `yarn prettier --write`; a staged file that still fails eslint after --fix aborts the commit. The hook is installed automatically by the `prepare: husky` script, and `--no-install` makes a missing lint-staged fail loudly instead of silently fetching it. Scope is exactly the staged set — no test, type-check, or whole-repo pass is gated (package.json defines no test script at all).",
+      "evidence": [".husky/pre-commit", ".husky/.gitignore", "package.json"],
+      "capability": "generative",
+      "confidence": "high"
+    },
+    {
+      "id": "mdx-frontmatter-publishing-contract",
+      "intent": "A post is published by dropping one file with required metadata into the content folder — no index registry to edit and no manual publish step.",
+      "discipline": "README states that adding an `.mdx` file under data/blog/ auto-generates its page, and prescribes the frontmatter keys every post carries: title, date, tags, draft, summary. The `draft` key is the one part enforced by code: scripts/rss.mjs filters `allBlogs.filter((post) => post.draft !== true)` before writing feed.xml and the per-tag feeds, so `draft: true` posts stay out of published artifacts. Feeds are regenerated as a build step rather than hand-maintained — the `build` script chains `node ./scripts/postbuild.mjs`, which calls the rss module. Missing or malformed frontmatter is rejected by no hook and no CI step, so beyond `draft` the contract is documentation, not a gate.",
+      "evidence": ["README.md", "scripts/rss.mjs", "scripts/postbuild.mjs", "package.json"],
+      "capability": "generative",
+      "confidence": "medium"
+    },
+    {
+      "id": "push-to-main-auto-deploy",
+      "intent": "main is the release channel: publishing happens by pushing, not by anyone running a deploy command locally.",
+      "discipline": ".github/workflows/pages.yml triggers on push to `main` (plus manual workflow_dispatch), builds with `yarn build` under EXPORT=1 / UNOPTIMIZED=1, uploads ./out, and the `deploy` job declares `needs: build`, so a failed build blocks deployment. `concurrency: group 'pages'` with `cancel-in-progress: false` serializes deploys instead of cancelling in-flight ones. The pipeline gates on build success only — no lint, type-check, or test job runs in CI, so the pre-commit hook is the sole quality gate. Caveat weakening this claim: README names Vercel as the deployment platform while this workflow targets GitHub Pages, and README also names tailwind-nextjs-starter-blog as the base template, so the workflow may be inherited rather than the path actually practised.",
+      "evidence": [".github/workflows/pages.yml", "README.md", "package.json"],
+      "capability": "generative",
+      "confidence": "low"
+    },
+    {
+      "id": "fixed-tag-vocabulary",
+      "intent": "Posts are filed under a small pre-declared tag set so category pages and per-tag feeds stay stable instead of fragmenting.",
+      "discipline": "README carries a '태그 규칙' table declaring four tags and the purpose each covers: job-crawler (job-posting crawler project), backend, adp, webdev. The cost of drift is visible in scripts/rss.mjs, which emits a separate RSS file for every key of the generated tag-data JSON it imports — an ad-hoc tag silently produces another feed directory. Nothing validates a post's tags against the documented table: no hook, no build step, no CI check. The rule exists only as README prose, so compliance is a convention the author keeps by hand.",
+      "evidence": ["README.md", "scripts/rss.mjs"],
+      "capability": "descriptive",
+      "confidence": "low"
+    }
+  ]
+}

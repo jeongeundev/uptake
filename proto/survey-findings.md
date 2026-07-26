@@ -93,9 +93,87 @@ contributors actually follow, **not what the code does**"를 명시했으므로 
 **방법론이 문서가 아니라 실행 가능한 기계로 존재할 때 수집이 취약하다** — phase 3 설계에
 그대로 반영할 것.
 
+---
+
+# 2차 — 하한선 검증 (방법론이 문서로 명시되지 않은 저장소)
+
+## 질문
+
+1차 대상 uptake는 `AGENTS.md`에 CRITICAL 규칙이 나열된 유별나게 친절한 저장소였다. **문서 없이
+관행만 있는 곳에서도 되는가?**
+
+## 조건
+
+- 대상: `tech-blog` — docs/ 0개, AGENTS/CLAUDE/CONTRIBUTING 0개. 방법론이 있다면 훅·CI·설정에만 존재
+- 투입: **7개 파일 / 9.7KB / ≈2.8K 토큰** (1차의 1/15)
+- 수행: 별도 fresh 에이전트. 도구 사용 Read·Write 2회뿐
+- 사전 고정한 실패 모드: **재료가 부족할 때 그럴듯한 일반론을 지어내는가**
+
+## 판정
+
+| 축 | 결과 |
+|---|---|
+| provenance | evidence **12/12 resolve**, 환각 0건 |
+| precision | 후보 4건 전부 대조 검증 통과 (아래) |
+| 후보 수 | 9 → **4건**. 재료에 비례해 줄었다 |
+| confidence 분포 | high 6/med 3 → **high 1 / med 1 / low 2** |
+| 해상도 | 유지 |
+
+주장 대조 (사람이 파일을 열어 확인):
+
+| 주장 | 실제 |
+|---|---|
+| `npx --no-install lint-staged` | `.husky/pre-commit` 그대로 |
+| test script가 아예 없다 | `scripts.test` 부재 확인 |
+| lint-staged가 eslint --fix + prettier --write | 확장자 목록까지 일치 |
+| `allBlogs.filter((post) => post.draft !== true)` | `scripts/rss.mjs:41` 그대로 |
+| pages.yml이 main push, `needs: build`, `cancel-in-progress: false` | 전부 일치 |
+| README는 Vercel인데 workflow는 GitHub Pages | README 5·30행 Vercel, 31행 기반 템플릿 명시 |
+
+## 사전 고정한 실패 모드는 나타나지 않았다 — 정반대였다
+
+1. **없는 것을 관찰했다.** "no test, type-check, or whole-repo pass is gated (package.json defines
+   no test script at all)" / "rejected by no hook and no CI step, so beyond `draft` the contract is
+   **documentation, not a gate**". 문서상 규칙과 실제 강제를 구분했다.
+2. **자기 반증을 제시했다.** ③에 스스로 단서를 붙였다 — "README names Vercel while this workflow
+   targets GitHub Pages … the workflow **may be inherited rather than the path actually practised**."
+   1차에서는 나오지 않은 행동이다. 재료가 빈약하자 더 신중해졌다.
+
+이것은 1차 결과의 방증이기도 하다. 1차의 high 편중이 "사전 지식으로 답한 것" 때문이었다면 재료를
+1/15로 줄여도 confidence가 유지됐어야 한다. 실제로는 정직하게 떨어졌다 — **모델이 재료에
+반응하고 있다.**
+
+## 예상 못 한 발견 — SURVEY는 "존재하는 규율"을 찾지 "채택된 규율"을 찾지 않는다
+
+저장소 소유자 확인 결과: **4건 중 저자가 의도한 것은 1건**(`fixed-tag-vocabulary`), 나머지 3건은
+`tailwind-nextjs-starter-blog` 템플릿에서 상속된 것이었다. 소유자는 "개발 방법을 생각하고 진행한
+게 아니다"라고 진술했다.
+
+confidence는 **저자 의도가 아니라 강제력**을 반영했다. 유일하게 의도된 ④가 가장 낮은 등급
+(descriptive/low)을 받았는데, 이는 옳은 판단이다 — 그 규칙을 검증하는 장치가 실제로 없다.
+
+**함의:** `capability`(판별 오라클 유무)·`evidenceStatus`(근거 repo 수) 외에 **"이 저장소가 만든
+것인가 / 상속받은 것인가"** 를 가르는 축이 필요하다. 남의 저장소를 분석했을 때 보일러플레이트를
+"그 팀의 방법론"으로 제시하면 사용자는 잘못된 것을 배운다.
+
+구분 신호 후보(미검증): git 히스토리(초기 커밋에 통째로 들어왔는지 vs 나중에 따로 추가됐는지),
+README의 명시적 설명 유무, 기본값 대비 커스터마이징 흔적.
+
+**비율은 일반화하지 마라.** tech-blog는 템플릿 기반 개인 블로그로 상속 비중이 극단적인 케이스다.
+성숙한 OSS는 다를 것이다. "구분 축이 필요하다"는 결론만 유효하다.
+
+## 2차의 한계
+
+- recall 미측정. 소유자에게 "의도한 규율" 목록이 없어 정답지를 만들 수 없었다
+- 여전히 표본 1회
+- 두 대상 모두 사람이 아는 저장소다. 낯선 대형 OSS는 미검증
+
+---
+
 ## phase 3에 넘길 것
 
 - `SIGNAL_RULES` + `EXCLUDE` — 7 카테고리 결정적 수집 규칙. 그대로 승격 후보
 - `buildSurveyPrompt` — 특히 `discipline` 필드 요구("Uses TDD is useless; …is useful")가 해상도를 만들었다. 이 지시가 없으면 결과가 어떻게 달라지는지는 미검증
 - `scoreCandidates` — provenance 자동 채점
-- 다음 검증: **방법론이 암묵적인 저장소**로 같은 실험. 그게 진짜 하한선이다
+- **상속 vs 자생 구분 축** — 2차의 최대 수확. `capability`·`evidenceStatus`와 직교하는 새 축이 필요하다
+- 다음 검증(미실행): 낯선 대형 OSS. 두 실험 모두 사람이 아는 저장소였다
