@@ -54,6 +54,8 @@ class StepExecutor:
     """Phase 디렉토리 안의 step들을 순차 실행하는 하네스."""
 
     MAX_RETRIES = 3
+    AGENT_MODEL = "sonnet"
+    TIMEOUT = 1800
     FEAT_MSG = "feat({phase}): step {num} — {name}"
     CHORE_MSG = "chore({phase}): step {num} output"
     TZ = timezone(timedelta(hours=9))
@@ -234,9 +236,9 @@ class StepExecutor:
             f"   {commit_example}\n\n---\n\n"
         )
 
-    # --- Codex 호출 ---
+    # --- 에이전트 호출 ---
 
-    def _invoke_codex(self, step: dict, preamble: str) -> dict:
+    def _invoke_agent(self, step: dict, preamble: str) -> dict:
         step_num, step_name = step["step"], step["name"]
         step_file = self._phase_dir / f"step{step_num}.md"
 
@@ -245,23 +247,37 @@ class StepExecutor:
             sys.exit(1)
 
         prompt = preamble + step_file.read_text()
-        result = subprocess.run(
-            # 프로젝트 훅(.codex/hooks.json)은 신뢰 등록 전까지 조용히 무시된다.
-            # 헤드리스 실행에는 승인 UI가 없으므로 bypass로 강제 활성화한다.
-            ["codex", "exec", "--dangerously-bypass-approvals-and-sandbox",
-             "--dangerously-bypass-hook-trust", "--json", prompt],
-            cwd=self._root, capture_output=True, text=True, timeout=1800,
-        )
+        try:
+            result = subprocess.run(
+                # 헤드리스 실행에는 승인 UI가 없으므로 권한 확인을 우회한다.
+                # 훅(.claude/settings.json)은 이 플래그와 무관하게 그대로 걸린다 —
+                # tdd-guard와 stop-verify는 유지된다.
+                #
+                # --disable-slash-commands: step 세션에서 스킬 호출 능력을 제거한다.
+                # step은 "이 step에 명시된 작업만" 하므로 스킬이 필요 없고,
+                # 능력을 남겨두면 프롬프트 금지문만으로는 확률적으로 샌다.
+                ["claude", "-p", prompt,
+                 "--model", self.AGENT_MODEL,
+                 "--dangerously-skip-permissions",
+                 "--disable-slash-commands",
+                 "--output-format", "json"],
+                cwd=self._root, capture_output=True, text=True, timeout=self.TIMEOUT,
+            )
+            exit_code, stdout, stderr = result.returncode, result.stdout, result.stderr
+        except subprocess.TimeoutExpired:
+            exit_code, stdout, stderr = -1, "", f"실행기 타임아웃: {self.TIMEOUT}s 초과"
+        except FileNotFoundError:
+            exit_code, stdout, stderr = -1, "", "실행기를 찾을 수 없습니다: claude CLI가 PATH에 없습니다"
 
-        if result.returncode != 0:
-            print(f"\n  WARN: Codex가 비정상 종료됨 (code {result.returncode})")
-            if result.stderr:
-                print(f"  stderr: {result.stderr[:500]}")
+        if exit_code != 0:
+            print(f"\n  WARN: 에이전트가 비정상 종료됨 (code {exit_code})")
+            if stderr:
+                print(f"  stderr: {stderr[:500]}")
 
         output = {
             "step": step_num, "name": step_name,
-            "exitCode": result.returncode,
-            "stdout": result.stdout, "stderr": result.stderr,
+            "exitCode": exit_code,
+            "stdout": stdout, "stderr": stderr,
         }
         out_path = self._phase_dir / f"step{step_num}-output.json"
         with open(out_path, "w") as f:
@@ -319,12 +335,23 @@ class StepExecutor:
                 tag += f" [retry {attempt}/{self.MAX_RETRIES}]"
 
             with progress_indicator(tag) as pi:
-                self._invoke_codex(step, preamble)
+                output = self._invoke_agent(step, preamble)
                 elapsed = int(pi.elapsed)
 
             index = self._read_json(self._index_file)
             status = next((s.get("status", "pending") for s in index["steps"] if s["step"] == step_num), "pending")
             ts = self._stamp()
+
+            # 실행기가 비정상 종료했고 step이 status를 건드리지도 못한 경우 =
+            # 구현 실패가 아니라 하네스 오류(쿼터 소진·CLI 부재·타임아웃)다.
+            # error로 기록하지 않고 pending 그대로 둔다 — 원인이 해소되면
+            # 같은 명령이 이 step부터 그대로 이어진다. 재시도도 태우지 않는다.
+            if output["exitCode"] != 0 and status == "pending":
+                print(f"  ⚠ Step {step_num}: 실행기를 완료하지 못했습니다 [{elapsed}s]")
+                print(f"    exit={output['exitCode']} — step 실패가 아니라 하네스 오류입니다.")
+                print(f"    상세: phases/{self._phase_dir_name}/step{step_num}-output.json")
+                print(f"    원인 해소 후 같은 명령을 재실행하면 이 step부터 이어집니다.")
+                sys.exit(3)
 
             if status == "completed":
                 for s in index["steps"]:

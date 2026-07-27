@@ -45,6 +45,44 @@ def test_success_keeps_stdout_empty(tmp_path):
     ]
 
 
+def test_stop_hook_active_skips_gate(tmp_path):
+    """이미 한 번 이어붙였으면 게이트를 재실행하지 않는다.
+
+    가드가 없으면 lint/build/test가 계속 실패할 때 세션이 끝나지 못하고
+    겉돌며, 할 일을 잃은 에이전트가 범위 밖 작업을 시작한다.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    npm = bin_dir / "npm"
+    npm.write_text(
+        "#!/bin/sh\n"
+        'echo "$*" >> "$STOP_HOOK_CALLS"\n'
+        "exit 1\n",
+        encoding="utf-8",
+    )
+    npm.chmod(0o755)
+    calls = tmp_path / "calls"
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "STOP_HOOK_CALLS": str(calls),
+    }
+
+    result = subprocess.run(
+        ["bash", str(HOOK)],
+        input=json.dumps(
+            {"hook_event_name": "Stop", "cwd": str(tmp_path), "stop_hook_active": True}
+        ),
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert not calls.exists()   # npm이 아예 호출되지 않는다
+
+
 def test_failure_blocks_without_writing_non_json_stdout(tmp_path):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
