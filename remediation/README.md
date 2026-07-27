@@ -1,7 +1,13 @@
 # remediation 루프 대장
 
-`/remediate` 루프의 산출물이 루프별 디렉터리로 쌓인다. 계약 정본은
-[`.agents/skills/remediate/CONTRACT.md`](../.agents/skills/remediate/CONTRACT.md)다.
+> **폐지됨 (2026-07-27).** `/remediate` 루프는 더 이상 돌지 않는다. 스킬·계약·엔진
+> (`.agents/skills/remediate/`·`scripts/remediate.py`·`scripts/test_remediate.py`)은 제거했다.
+> 이 디렉터리와 `phases/*-fix-c*`는 **실제 커밋을 만든 실행 기록**이라 남긴다 — 읽기 전용이며 새로 쌓지 않는다.
+>
+> 대체: 리뷰는 `$review`가 독립 세션에서 한 번 돌고 **판정으로 끝난다**. 결과를 `phases/`로 되먹이지 않는다.
+> 폐지 이유는 이 문서가 기록한 사고 자체다 — 수정 루프를 phase로 만들면 재진입 지점이 생기고 루프가 갈라진다.
+
+아래는 루프가 돌던 시기의 산출물 기록이다.
 
 ## 명명 규칙
 

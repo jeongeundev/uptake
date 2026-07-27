@@ -1,1 +1,0 @@
-../../.agents/skills/remediate/SKILL.md
