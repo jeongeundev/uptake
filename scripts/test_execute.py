@@ -375,7 +375,7 @@ class TestCheckoutBranch:
         ])
         with pytest.raises(SystemExit) as exc_info:
             executor._checkout_branch()
-        assert exc_info.value.code == 1
+        assert exc_info.value.code == 3   # git 문제는 step 구현 실패가 아니다
 
     def test_no_git_exits(self, executor):
         self._mock_git(executor, [
@@ -383,7 +383,7 @@ class TestCheckoutBranch:
         ])
         with pytest.raises(SystemExit) as exc_info:
             executor._checkout_branch()
-        assert exc_info.value.code == 1
+        assert exc_info.value.code == 3   # git 문제는 step 구현 실패가 아니다
 
 
 # ---------------------------------------------------------------------------
@@ -470,10 +470,11 @@ class TestInvokeAgent:
         assert data["exitCode"] == 0
 
     def test_nonexistent_step_file_exits(self, executor):
+        """step 파일이 없으면 실행기를 띄울 수조차 없다 = 하네스 오류."""
         step = {"step": 99, "name": "nonexistent"}
         with pytest.raises(SystemExit) as exc_info:
             executor._invoke_agent(step, "preamble")
-        assert exc_info.value.code == 1
+        assert exc_info.value.code == 3
 
     def test_timeout_is_1800(self, executor):
         mock_result = MagicMock(returncode=0, stdout="{}", stderr="")
@@ -576,6 +577,56 @@ class TestHarnessError:
         assert len(calls) == ex.StepExecutor.MAX_RETRIES
         assert self._step_entry(executor)["status"] == "error"
 
+    @staticmethod
+    def _stub_git_status(executor, porcelain):
+        """_run_git 대역 — `status --porcelain`만 응답한다."""
+        def fake(*args):
+            out = porcelain if args[:2] == ("status", "--porcelain") else ""
+            return subprocess.CompletedProcess(list(args), 0, stdout=out, stderr="")
+        return patch.object(executor, "_run_git", side_effect=fake)
+
+    def test_warns_about_uncommitted_leftovers(self, executor, capsys):
+        """타임아웃은 에이전트가 파일을 고친 **뒤** 터진다 — 남은 편집을 알려야 한다.
+
+        커밋을 막아도 워킹트리 잔재는 그대로 남고, 재실행 후 다음 성공 커밋의
+        `git add -A`가 그것을 함께 담는다. 커밋을 막은 취지가 한 step 뒤로
+        밀릴 뿐이므로, 최소한 무엇이 남았는지는 보여야 한다.
+        """
+        step = {"step": 2, "name": "ui"}
+        with self._stub_agent(executor, -1), \
+             self._stub_git_status(executor, " M src/app.ts\n?? src/new.ts\n"), \
+             patch.object(executor, "_commit_step"):
+            with pytest.raises(SystemExit) as exc_info:
+                executor._execute_single_step(step, "guardrails")
+
+        assert exc_info.value.code == 3
+        out = capsys.readouterr().out
+        assert "커밋되지 않은" in out
+        assert "src/app.ts" in out
+        assert "src/new.ts" in out
+
+    def test_no_leftover_warning_when_tree_is_clean(self, executor, capsys):
+        """쿼터 소진·CLI 부재는 작업 전 실패다 — 잔재가 없으면 경고도 없다."""
+        step = {"step": 2, "name": "ui"}
+        with self._stub_agent(executor, -1), \
+             self._stub_git_status(executor, ""), \
+             patch.object(executor, "_commit_step"):
+            with pytest.raises(SystemExit):
+                executor._execute_single_step(step, "guardrails")
+
+        assert "커밋되지 않은" not in capsys.readouterr().out
+
+    def test_phase_bookkeeping_is_not_a_leftover(self, executor, capsys):
+        """index.json은 하네스 자신이 쓴다(started_at) — 잔재로 세면 매번 거짓 경보다."""
+        step = {"step": 2, "name": "ui"}
+        with self._stub_agent(executor, -1), \
+             self._stub_git_status(executor, " M phases/0-mvp/index.json\n"), \
+             patch.object(executor, "_commit_step"):
+            with pytest.raises(SystemExit):
+                executor._execute_single_step(step, "guardrails")
+
+        assert "커밋되지 않은" not in capsys.readouterr().out
+
     def test_nonzero_exit_with_completed_status_is_success(self, executor):
         """status를 completed로 쓴 뒤 비정상 종료한 경우는 성공으로 본다."""
         def fake(step, preamble):
@@ -622,11 +673,12 @@ class TestMainCli:
             assert exc_info.value.code == 2  # argparse exits with 2
 
     def test_invalid_phase_dir_exits(self):
+        """phase 디렉터리가 없는 것은 step 구현 실패가 아니다 = 하네스 오류."""
         with patch("sys.argv", ["execute.py", "nonexistent"]):
             with patch.object(ex, "ROOT", Path("/tmp/fake_nonexistent")):
                 with pytest.raises(SystemExit) as exc_info:
                     ex.main()
-                assert exc_info.value.code == 1
+                assert exc_info.value.code == 3
 
     def test_missing_index_exits(self, tmp_project):
         (tmp_project / "phases" / "empty").mkdir()
@@ -634,7 +686,49 @@ class TestMainCli:
             with patch.object(ex, "ROOT", tmp_project):
                 with pytest.raises(SystemExit) as exc_info:
                     ex.main()
-                assert exc_info.value.code == 1
+                assert exc_info.value.code == 3
+
+    def test_unexpected_exception_becomes_harness_error(self, tmp_project, phase_dir):
+        """예상 못 한 예외가 트레이스백으로 죽으면 파이썬이 exit 1을 낸다 —
+        이 저장소 계약에서 1은 'step 실패'이므로 하네스 오류가 오분류된다.
+        트레이스백은 그대로 보이되 종료코드만 3으로 옮긴다(삼키지 않는다).
+        """
+        with patch("sys.argv", ["execute.py", "0-mvp"]):
+            with patch.object(ex, "ROOT", tmp_project):
+                with patch.object(ex.StepExecutor, "run", side_effect=PermissionError("denied")):
+                    with pytest.raises(SystemExit) as exc_info:
+                        ex.main()
+                    assert exc_info.value.code == 3
+
+
+# ---------------------------------------------------------------------------
+# _finalize (mocked git)
+# ---------------------------------------------------------------------------
+
+class TestFinalize:
+    """마감 단계의 실패는 step 구현 실패가 아니다 — step은 이미 전부 통과했다."""
+
+    @staticmethod
+    def _mock_git(executor, failing_verb):
+        def fake(*args):
+            rc = 1 if args[0] == failing_verb else 0
+            return subprocess.CompletedProcess(list(args), rc, stdout="", stderr="denied")
+        return patch.object(executor, "_run_git", side_effect=fake)
+
+    def test_push_failure_exits_3(self, executor, top_index):
+        executor._auto_push = True
+        with self._mock_git(executor, "push"):
+            with pytest.raises(SystemExit) as exc_info:
+                executor._finalize()
+        assert exc_info.value.code == 3
+
+    def test_branch_resolve_failure_exits_3(self, executor, top_index):
+        executor._auto_push = True
+        executor._use_current_branch = True
+        with self._mock_git(executor, "rev-parse"):
+            with pytest.raises(SystemExit) as exc_info:
+                executor._finalize()
+        assert exc_info.value.code == 3
 
 
 # ---------------------------------------------------------------------------

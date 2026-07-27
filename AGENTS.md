@@ -6,7 +6,7 @@
 ## 문서 지도
 - [`docs/PRD.md`](./docs/PRD.md) — 요구사항 (무엇을·누구를 위해) + **MVP 수용 기준** (구현 전 테스트로 옮길 대상)
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — 설계 (어떻게) + VERIFY 실행 계약 · 신뢰 경계 · 패턴 직렬화 계약
-- [`docs/ADR.md`](./docs/ADR.md) — 결정 기록 (왜) · ADR-001~013
+- [`docs/ADR.md`](./docs/ADR.md) — 결정 기록 (왜) · ADR-001~019
 - [`docs/UI_GUIDE.md`](./docs/UI_GUIDE.md) — UI 가이드 (※ 잠정, 미확정)
 
 ## 기술 스택
@@ -51,7 +51,7 @@ npm run eval:proposer # 선택적 실제 proposer smoke (AC 아님; 키가 없�
 
 ## 하네스
 
-Step 실행기는 Claude 전용이고, 훅과 스킬은 **Codex·Claude Code 양쪽에서 동작한다.**
+Step 실행기는 Claude 전용이고, 훅과 `$harness`는 **Codex·Claude Code 양쪽에서 동작한다.** `$review`는 **Claude Code 전용**이다 — 검증 축을 독립 서브에이전트로 띄우고(`subagent_type: Explore`) 그 결과를 다시 반박 검증하는 구조라 Claude Code의 Agent 도구에 의존한다. 축 분리와 자기채점 회피(ADR-008)가 그 병렬 구조에 걸려 있어 순차 실행으로 대체할 수 없다.
 
 | 대상 | 위치 |
 |------|------|
@@ -82,6 +82,8 @@ python3 -m pytest scripts/ -q
 
 `scripts/execute.py`는 헤드리스로 돌아 승인 UI가 없으므로 `--dangerously-skip-permissions`를 붙인다 — 이 저장소의 훅만 벡팅했다는 전제다. Claude Code의 훅은 이 플래그와 무관하게 걸리므로 `tdd-guard`와 `stop-verify`는 step 실행 중에도 그대로 살아 있다.
 
+`stop-verify`의 **차단은 세션당 1회**다. 두 번째 Stop부터는 게이트를 여전히 실행하지만 red여도 세션을 막지 않고(무한루프 방지) stderr에 `GATE STILL RED`를 남긴다. 즉 **게이트를 통과하지 못한 채 끝난 step이 존재할 수 있다** — 그 사실은 stderr에만 남고 `execute.py`는 그것을 보지 않으므로, step이 `completed`로 커밋됐다는 것이 lint/build/test 통과를 뜻하지는 않는다. 게이트 red를 흔적 없이 통과시키는 것(성공 위장)만 막았을 뿐이다.
+
 ### CRITICAL: 실행기 오류는 step 실패가 아니다
 
 `claude`를 **띄우지 못한 것**(쿼터 소진·CLI 부재·타임아웃)과 **step 구현이 실패한 것**은 다르다. 실행기가 비정상 종료했는데 step이 `index.json`의 status를 건드리지도 못했다면 하네스 오류이며, `execute.py`는 이때:
@@ -89,8 +91,13 @@ python3 -m pytest scripts/ -q
 - status를 `pending`으로 **남긴다** (`error`로 기록하지 않는다)
 - 재시도를 태우지 않는다 (쿼터가 없는 상태에서 3회 헛도는 낭비를 막는다)
 - 커밋하지 않는다 (반쪽 작업이 `feat(...)`로 들어가는 것을 막는다)
+- 워킹트리에 남은 미커밋 변경이 있으면 목록을 출력한다
 - `phases/index.json`을 건드리지 않고 **exit code 3**으로 멈춘다
 
 원인이 해소되면 같은 명령을 그대로 재실행하면 된다 — 중단된 step부터 이어진다. 이것은 게이트의 `gate-error`와 같은 원칙이다(ADR-008): 인프라 오류를 결과로 계산하지 않는다. **exit 1(step 실패)과 exit 3(하네스 오류)을 뭉치지 마라.**
 
+**"커밋하지 않는다"는 잔재를 없앤다는 뜻이 아니다.** 타임아웃은 에이전트가 파일을 고친 **뒤** 터지므로 워킹트리에 반쪽 편집이 남는다. 재실행은 그 위에서 step을 처음부터 다시 돌리고, 다음 성공 커밋의 `git add -A`가 잔재를 함께 담는다 — 커밋을 막은 효과는 한 step 뒤로 밀릴 뿐이다. 실행기는 자동으로 되돌리지 않는다(작업 파괴). 목록을 보고 **사람이** 이어 쓸지 버릴지 정한다. 이 문제가 없는 것은 작업 전 실패(쿼터 소진·CLI 부재)뿐이다.
+
 exit code: `1` = step 실패, `2` = blocked(사용자 개입 필요), `3` = 하네스 오류.
+
+**exit 1은 좁다.** "step 구현이 3회 시도 후에도 실패했다"와 "이전 실행이 남긴 `error` step이 막고 있다" 둘뿐이다. 나머지는 전부 3이다 — phase 디렉터리·`index.json`·`step{N}.md` 부재, git 부재·checkout 실패, push 실패, 예상 못 한 예외. 판정 기준은 "step의 구현이 틀렸는가"이지 "무언가 실패했는가"가 아니다. 예상 못 한 예외는 트레이스백을 그대로 출력한 뒤 3으로 나간다 — 종료코드만 옮기고 삼키지 않는다.

@@ -14,6 +14,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import types
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -77,12 +78,12 @@ class StepExecutor:
 
         if not self._phase_dir.is_dir():
             print(f"ERROR: {self._phase_dir} not found")
-            sys.exit(1)
+            sys.exit(3)
 
         self._index_file = self._phase_dir / "index.json"
         if not self._index_file.exists():
             print(f"ERROR: {self._index_file} not found")
-            sys.exit(1)
+            sys.exit(3)
 
         idx = self._read_json(self._index_file)
         self._project = idx.get("project", "project")
@@ -129,7 +130,7 @@ class StepExecutor:
         if r.returncode != 0:
             print(f"  ERROR: git을 사용할 수 없거나 git repo가 아닙니다.")
             print(f"  {r.stderr.strip()}")
-            sys.exit(1)
+            sys.exit(3)
 
         if r.stdout.strip() == branch:
             return
@@ -141,9 +142,22 @@ class StepExecutor:
             print(f"  ERROR: 브랜치 '{branch}' checkout 실패.")
             print(f"  {r.stderr.strip()}")
             print(f"  Hint: 변경사항을 stash하거나 commit한 후 다시 시도하세요.")
-            sys.exit(1)
+            sys.exit(3)
 
         print(f"  Branch: {branch}")
+
+    def _uncommitted_paths(self) -> list:
+        """워킹트리에 남은 미커밋 경로. 하네스 자신이 쓰는 index.json은 뺀다.
+
+        `started_at` 기록만으로도 index.json은 항상 dirty하므로, 그것까지
+        세면 매번 거짓 경보가 되어 진짜 잔재가 묻힌다.
+        """
+        r = self._run_git("status", "--porcelain")
+        if r.returncode != 0:
+            return []
+        bookkeeping = f"phases/{self._phase_dir_name}/index.json"
+        paths = [line[3:] for line in r.stdout.splitlines() if len(line) > 3]
+        return [p for p in paths if p != bookkeeping]
 
     def _commit_step(self, step_num: int, step_name: str):
         output_rel = f"phases/{self._phase_dir_name}/step{step_num}-output.json"
@@ -244,7 +258,7 @@ class StepExecutor:
 
         if not step_file.exists():
             print(f"  ERROR: {step_file} not found")
-            sys.exit(1)
+            sys.exit(3)
 
         prompt = preamble + step_file.read_text()
         try:
@@ -268,6 +282,10 @@ class StepExecutor:
             exit_code, stdout, stderr = -1, "", f"실행기 타임아웃: {self.TIMEOUT}s 초과"
         except FileNotFoundError:
             exit_code, stdout, stderr = -1, "", "실행기를 찾을 수 없습니다: claude CLI가 PATH에 없습니다"
+        except OSError as e:
+            # 권한 부족·fd 고갈 등. 잡지 않으면 트레이스백으로 죽고 파이썬이
+            # exit 1을 내는데, 이 저장소 계약에서 1은 'step 실패'다.
+            exit_code, stdout, stderr = -1, "", f"실행기를 띄우지 못했습니다: {e!r}"
 
         if exit_code != 0:
             print(f"\n  WARN: 에이전트가 비정상 종료됨 (code {exit_code})")
@@ -351,6 +369,21 @@ class StepExecutor:
                 print(f"    exit={output['exitCode']} — step 실패가 아니라 하네스 오류입니다.")
                 print(f"    상세: phases/{self._phase_dir_name}/step{step_num}-output.json")
                 print(f"    원인 해소 후 같은 명령을 재실행하면 이 step부터 이어집니다.")
+
+                # 타임아웃은 에이전트가 파일을 고친 뒤 터진다. 커밋을 막아도
+                # 잔재는 워킹트리에 남고, 재실행 후 다음 성공 커밋의 `git add -A`가
+                # 그것을 함께 담는다 — 커밋을 막은 취지가 한 step 뒤로 밀릴 뿐이다.
+                # 자동으로 되돌리지는 않는다(작업 파괴). 무엇이 남았는지만 보여준다.
+                leftovers = self._uncommitted_paths()
+                if leftovers:
+                    print(f"\n    ⚠ 워킹트리에 커밋되지 않은 변경 {len(leftovers)}건이 남아 있습니다:")
+                    for p in leftovers[:10]:
+                        print(f"      {p}")
+                    if len(leftovers) > 10:
+                        print(f"      … 외 {len(leftovers) - 10}건")
+                    print(f"    재실행은 이 step을 처음부터 다시 돌리며, 다음 성공 커밋이 위 변경을")
+                    print(f"    함께 담습니다. 이어서 쓰려면 그대로 두고, 버리려면 먼저 정리하세요.")
+
                 sys.exit(3)
 
             if status == "completed":
@@ -436,14 +469,14 @@ class StepExecutor:
                 branch_result = self._run_git("rev-parse", "--abbrev-ref", "HEAD")
                 if branch_result.returncode != 0:
                     print(f"\n  ERROR: 현재 브랜치를 확인하지 못했습니다.")
-                    sys.exit(1)
+                    sys.exit(3)
                 branch = branch_result.stdout.strip()
             else:
                 branch = f"feat-{self._phase_name}"
             r = self._run_git("push", "-u", "origin", branch)
             if r.returncode != 0:
                 print(f"\n  ERROR: git push 실패: {r.stderr.strip()}")
-                sys.exit(1)
+                sys.exit(3)
             print(f"  ✓ Pushed to origin/{branch}")
 
         print(f"\n{'='*60}")
@@ -462,11 +495,19 @@ def main():
     )
     args = parser.parse_args()
 
-    StepExecutor(
-        args.phase_dir,
-        auto_push=args.push,
-        use_current_branch=args.current_branch,
-    ).run()
+    # 예상 못 한 예외는 트레이스백으로 죽고 파이썬이 exit 1을 내는데, 이 저장소
+    # 계약에서 1은 'step 실패'다. 트레이스백은 그대로 보이되(삼키지 않는다)
+    # 종료코드만 하네스 오류로 옮긴다. SystemExit은 BaseException이라 통과한다.
+    try:
+        StepExecutor(
+            args.phase_dir,
+            auto_push=args.push,
+            use_current_branch=args.current_branch,
+        ).run()
+    except Exception:
+        traceback.print_exc()
+        print("\n  위 예외는 하네스 오류입니다 — step 구현 실패가 아닙니다.")
+        sys.exit(3)
 
 
 if __name__ == "__main__":

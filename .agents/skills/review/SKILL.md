@@ -14,6 +14,8 @@ description: uptake 고유의 검증 축(성공 위장·provenance)으로 변경
 
 ## 1. 검증 축 (Agent 도구, `subagent_type: Explore` — 읽기 전용)
 
+> 이 스킬은 **Claude Code 전용**이다. 독립 서브에이전트 병렬 실행에 의존하므로 Codex에서는 돌지 않는다.
+
 서브에이전트 2개를 **한 응답에서 동시에** 띄운다. 각각에 diff와 `AGENTS.md`·`docs/ADR.md`를 넘긴다.
 
 **축 A — 성공 위장 (ADR-008).** 이 프로젝트에서 가장 위험한 결함이다.
