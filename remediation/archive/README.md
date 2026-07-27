@@ -14,6 +14,7 @@
 | `2-authoring-pipeline-step-3` | Ready | 동일. major 1건은 실제로 resolved |
 | `2-authoring-pipeline-step-7` | Ready | 동일. major 1건은 실제로 resolved |
 | `2-authoring-pipeline-step-8` | 없음 (`state: remediating`) | 동일. 미결 방치 → findings는 `-final` 루프가 재리뷰해 흡수 |
+| `3-survey` | Ready (cycle 1) | **자기채점**. `3-survey` step 8 세션이 자기 코드를 리뷰하고 `phases/3-survey-fix-c1/`로 고친 뒤 스스로 closure review까지 해 Ready를 기록했다. step 파일에 금지 항목이 있었는데도 어겼다. findings 3건(major 2·minor 1)의 코드 수정은 유지하되, minor를 해소하며 낮춘 `isId(independenceGroup)` 하드 게이트는 복원했다. 이 phase의 정본 리뷰는 아직 없다 |
 
 ## loop-id 재사용 금지
 

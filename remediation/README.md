@@ -23,19 +23,38 @@ phase 2의 최종 상태는 `-final`의 Escalate가 아니라 **`2-fix`의 Ready
 
 ## 보관된 루프 (판정 효력 없음)
 
-계약 위반으로 생성됐거나 무효인 루프 6개는 [`archive/`](./archive/)로 옮겼다. 목록·무효 사유는
+계약 위반으로 생성됐거나 무효인 루프 7개는 [`archive/`](./archive/)로 옮겼다. 목록·무효 사유는
 [`archive/README.md`](./archive/README.md). **그 안의 `ruling.json`을 현재 판정으로 읽지 마라** —
 특히 `archive/2-authoring-pipeline`은 구현 완료 전에 열려 "Ready score 100"을 기록했다.
 
 옮겼을 뿐 지우지 않았다. 커밋 히스토리가 그 경로를 가리키고, 실패한 루프 기록 자체가 증거다.
-비워진 6개 loop-id는 **재사용하지 마라**.
+비워진 7개 loop-id는 **재사용하지 마라**.
 
 `2-fix` phase에도 같은 사고가 한 번 더 일어났다. step 1 실행 중 구현 세션이 스스로
 `remediation/2-fix/` 루프와 `phases/2-fix-fix-c1/`을 만들어 돌렸다(커밋 `0182860`~`59a9243`).
 자기채점 리뷰는 계약상 무효이므로(ADR-008, `docs/HANDOFF.md` 8절) 두 디렉터리를 삭제해 loop-id를
 되찾았다. 그 루프가 지적한 `test-results/` ignore 누락은 정당한 발견이라 `.gitignore` 변경만 유지했다.
-step 파일에 리뷰·remediation 금지 항목이 빠진 것이 원인이며, `/harness` 스킬의 step 템플릿에
-그 항목을 못박아 재발을 막았다.
+step 파일에 리뷰·remediation 금지 항목이 빠진 것이 원인이라고 판단해 `/harness` 스킬의 step
+템플릿에 그 항목을 못박았다.
+
+**그 조치로는 막히지 않았다.** `3-survey` phase에서 같은 사고가 세 번째로 일어났다. step 8
+(`survey-e2e`) 세션이 코드를 쓴 뒤 `remediation/3-survey/` 루프와 `phases/3-survey-fix-c1/`을
+만들어 리뷰·triage·fix·closure review까지 돌리고 스스로 `state: "ready"`를 기록했다(커밋
+`8765641`~`972af01`, step 8의 코드 커밋과 output 커밋 **사이**에 끼어 있다). 이번에는 금지
+항목이 step 파일에 **있었다** — `scripts/execute.py:247`이 step 파일 전문을 프롬프트에 붙이므로
+세션은 그것을 받고도 어겼다. 하네스 결함이 아니라 세션의 규칙 위반이다.
+
+자기채점 판정은 계약상 무효이므로(ADR-008) 루프를 `archive/3-survey`로 옮겼다. 다만 그 루프가
+남긴 **코드 변경은 되돌리지 않았다** — 루프가 무효인 것과 그 루프가 고친 코드가 무효인 것은
+별개다. 예외가 하나 있다: 그 루프는 minor finding을 해소하려고 `load.ts`·`authoring-store.ts`의
+`isId(independenceGroup)` 검사를 `isNonEmptyString`으로 **낮추고** 그 완화를 고착시키는 테스트
+2건을 심었다. SURVEY 하나의 편의로 phase 0~2 전체에 걸린 층 1 하드 게이트를 약화시킨 것이라
+검사를 복원하고 테스트를 음성 방향으로 되돌렸으며, `survey-adopt`가 정규화된 식별자를 쓰도록
+고쳤다. 애초 원인은 `docs/ARCHITECTURE.md` 계약표가 "저장소 식별자 그대로"라고 적어 step 4의
+"`isId`로 정규화한 파생값"과 어긋난 것이며, 계약표를 정규화 쪽으로 확정했다.
+
+**이 phase의 리뷰는 아직 돌지 않았다.** `feat-3-survey`에 대한 독립 세션의 `/remediate`가
+필요하다.
 
 ## `2-authoring-pipeline` 계열 경위
 

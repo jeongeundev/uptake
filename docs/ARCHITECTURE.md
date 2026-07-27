@@ -113,7 +113,7 @@ type SurveyCandidate = {
 | `capability` | `"descriptive"` **고정** | oracle 초안·자기검증은 앵커 형태 한정(ADR-016) |
 | `evidenceStatus` | `"observed"` **고정** | 저장소 1개 = 독립 그룹 1개(ADR-005) |
 | `sources[0].repository` | 사용자가 지정한 저장소 식별자 | |
-| `sources[0].independenceGroup` | 저장소 식별자 그대로 | 그룹이 1개인 것은 판정이 아니라 자명한 사실이다 |
+| `sources[0].id`·`independenceGroup` | 저장소 식별자를 `isId`(kebab-case)로 **정규화한 값**. 정규화할 수 없으면 채택을 거부한다 | 그룹이 1개인 것은 판정이 아니라 자명한 사실이다. **raw 식별자를 통과시키려고 층 1 게이트의 `isId` 검사를 낮추지 마라** — SURVEY 하나의 편의로 phase 0~2 전체의 계약을 약화시키는 일이다 |
 | `sources[0].independenceNote` | 단일 저장소 관찰임을 밝히는 고정 문구 | |
 | `sources[0].isTargetStack` | `detect.ts`의 결정적 관찰 결과 | 추론이 아니라 관찰 |
 | `sources[0].stack` | 관찰된 표시 라벨, 없으면 `"unspecified"` | 표시용이며 비교에 쓰지 않는다 |

@@ -165,7 +165,7 @@ function parsePattern(value: unknown, filename: string): ValidationResult {
         revisionPattern.test(source.revision) &&
         isNonEmptyString(source.stack) &&
         typeof source.isTargetStack === "boolean" &&
-        isNonEmptyString(source.independenceGroup) &&
+        isId(source.independenceGroup) &&
         isNonEmptyString(source.independenceNote),
     ) ||
     !hasUniqueIds(sources)

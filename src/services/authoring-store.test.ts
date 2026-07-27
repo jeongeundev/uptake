@@ -30,7 +30,7 @@ import {
   registerAuthoringDraft as registerStoredAuthoringDraft,
 } from "./authoring-store";
 
-it("accepts a repository identifier as an independence group", () => {
+it("rejects an independence group that is not a kebab-case id", () => {
   const value = request({
     evidenceStatus: "observed",
     sources: [
@@ -41,7 +41,7 @@ it("accepts a repository identifier as an independence group", () => {
     ],
   });
 
-  expect(isAuthoringRequest(value)).toBe(true);
+  expect(isAuthoringRequest(value)).toBe(false);
 });
 
 let root: string;
