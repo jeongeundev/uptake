@@ -1,4 +1,5 @@
 import type { BindingKind } from "@/lib/engine/detect";
+import type { SurveyCandidate } from "@/types/survey";
 
 export const ANCHOR_ROLE_IDS = [
   "spec-artifact",
@@ -71,6 +72,19 @@ export type Proposer = {
   ): Promise<FileCandidate[]>;
   proposeContrast(request: ContrastRequest): Promise<ContrastProposal>;
   proposeNarrative(request: NarrativeRequest): Promise<NarrativeProposal>;
+};
+
+export type SurveyRequest = {
+  repository: string;
+  revision: string;
+  files: { path: string; ruleId: string; content: string }[];
+};
+
+export type SurveyProposer = {
+  readonly metadata: ProposerMetadata;
+  proposeSurveyCandidates(
+    request: SurveyRequest,
+  ): Promise<SurveyCandidate[]>;
 };
 
 const boundaryPrefix = "<<<UPTAKE_UNTRUSTED:";

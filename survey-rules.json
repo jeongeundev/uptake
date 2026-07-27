@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "budget": {
+    "perFileChars": 12000,
+    "totalChars": 220000
+  },
+  "exclude": [
+    "(^|/)(fixtures?|__fixtures__|node_modules|vendor|third_party)/"
+  ],
+  "rules": [
+    {
+      "id": "agent-instructions",
+      "include": [
+        "^([Aa][Gg][Ee][Nn][Tt][Ss]|[Cc][Ll][Aa][Uu][Dd][Ee]|[Gg][Ee][Mm][Ii][Nn][Ii]|[Cc][Oo][Nn][Tt][Rr][Ii][Bb][Uu][Tt][Ii][Nn][Gg]|[Rr][Ee][Aa][Dd][Mm][Ee]|[Hh][Aa][Cc][Kk][Ii][Nn][Gg]|[Dd][Ee][Vv][Ee][Ll][Oo][Pp][Ii][Nn][Gg])\\.([Mm][Dd]|[Rr][Ss][Tt]|[Tt][Xx][Tt])$",
+        "^([Aa][Gg][Ee][Nn][Tt][Ss]|[Cc][Ll][Aa][Uu][Dd][Ee]|[Gg][Ee][Mm][Ii][Nn][Ii]|[Cc][Oo][Nn][Tt][Rr][Ii][Bb][Uu][Tt][Ii][Nn][Gg]|[Rr][Ee][Aa][Dd][Mm][Ee]|[Hh][Aa][Cc][Kk][Ii][Nn][Gg]|[Dd][Ee][Vv][Ee][Ll][Oo][Pp][Ii][Nn][Gg])$"
+      ]
+    },
+    {
+      "id": "agent-config",
+      "include": [
+        "^\\.(agents|claude|codex|cursor|windsurf)/.+\\.(md|json|toml)$"
+      ]
+    },
+    {
+      "id": "ci",
+      "include": [
+        "^\\.github/workflows/.+\\.(yml|yaml)$"
+      ]
+    },
+    {
+      "id": "hooks",
+      "include": [
+        "^\\.husky/.+",
+        "^\\.pre-commit-config\\.(yml|yaml)$",
+        "(^|/)(hook|hooks)/.+\\.(sh|py|js|ts)$"
+      ]
+    },
+    {
+      "id": "task-runner",
+      "include": [
+        "^(Makefile|justfile|Taskfile\\.(yml|yaml)|package\\.json|pyproject\\.toml|Cargo\\.toml)$"
+      ]
+    },
+    {
+      "id": "design-docs",
+      "include": [
+        "^docs?/.+\\.(md|rst)$",
+        "(^|/)([Aa][Dd][Rr][Ss]?|[Rr][Ff][Cc][Ss]?)(/|[-_.]).*"
+      ]
+    },
+    {
+      "id": "test-config",
+      "include": [
+        "(^|/)(vitest|jest|playwright|karma|pytest|conftest|tox)[^/]*\\.(ts|mts|js|mjs|py|ini|toml|cfg)$"
+      ]
+    },
+    {
+      "id": "automation",
+      "include": [
+        "^(scripts|bin|tools|tasks)/[^/]+\\.(py|sh|js|ts|mjs|mts|rb|go)$"
+      ]
+    }
+  ]
+}

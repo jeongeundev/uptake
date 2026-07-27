@@ -25,9 +25,24 @@ import {
   __resetAuthoringStoreForTests,
   approveAuthoringDraft as approveStoredAuthoringDraft,
   createAuthoringDraft,
+  isAuthoringRequest,
   rejectAuthoringDraft,
   registerAuthoringDraft as registerStoredAuthoringDraft,
 } from "./authoring-store";
+
+it("rejects an independence group that is not a kebab-case id", () => {
+  const value = request({
+    evidenceStatus: "observed",
+    sources: [
+      {
+        ...request().sources[0],
+        independenceGroup: "fixtures/a/b",
+      },
+    ],
+  });
+
+  expect(isAuthoringRequest(value)).toBe(false);
+});
 
 let root: string;
 let sourceRoot: string;

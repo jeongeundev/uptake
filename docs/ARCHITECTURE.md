@@ -113,7 +113,7 @@ type SurveyCandidate = {
 | `capability` | `"descriptive"` **고정** | oracle 초안·자기검증은 앵커 형태 한정(ADR-016) |
 | `evidenceStatus` | `"observed"` **고정** | 저장소 1개 = 독립 그룹 1개(ADR-005) |
 | `sources[0].repository` | 사용자가 지정한 저장소 식별자 | |
-| `sources[0].independenceGroup` | 저장소 식별자 그대로 | 그룹이 1개인 것은 판정이 아니라 자명한 사실이다 |
+| `sources[0].id`·`independenceGroup` | 저장소 식별자를 `isId`(kebab-case)로 **정규화한 값**. 정규화할 수 없으면 채택을 거부한다 | 그룹이 1개인 것은 판정이 아니라 자명한 사실이다. **raw 식별자를 통과시키려고 층 1 게이트의 `isId` 검사를 낮추지 마라** — SURVEY 하나의 편의로 phase 0~2 전체의 계약을 약화시키는 일이다 |
 | `sources[0].independenceNote` | 단일 저장소 관찰임을 밝히는 고정 문구 | |
 | `sources[0].isTargetStack` | `detect.ts`의 결정적 관찰 결과 | 추론이 아니라 관찰 |
 | `sources[0].stack` | 관찰된 표시 라벨, 없으면 `"unspecified"` | 표시용이며 비교에 쓰지 않는다 |
@@ -127,6 +127,10 @@ type SurveyCandidate = {
 **승인·등재는 기존 계약 그대로.** 초안은 승인 전까지 카탈로그에 쓰지 않고, 입력 fingerprint에 결속된 draft로 남으며, 승인 이벤트가 한 번 소비돼 `catalog/<patternId>.json`에 원자적으로 기록된다. 기존 파일을 덮어쓰지 않고 patternId 충돌은 등재 거부다(씨앗 보호). 기록 전·후로 층 1 하드 게이트를 통과한다.
 
 **결과 화면은 한계를 밝힌다.** 자생/상속을 구분하지 않는다는 것(ADR-019), `observed`는 "이 저장소가 실제로 이렇게 한다"까지만 주장한다는 것(ADR-006)을 숨기지 않는다. 서술적 태도의 물질적 형태다.
+
+**SURVEY 표면.** 제품의 첫 섹션은 저장소 식별자 입력 → 후보 선택 → 채택 초안 검토 → 승인 → 등재 순서로 진행한다. 후보는 `name`·`intent`·`discipline`·`tradeoffs`·판단 보조용 `confidence`와 모든 evidence 경로를 펼쳐 보이고, `discardedEvidence`·`discardedCandidates`·수집 `skipped`는 항목별 사유와 함께 같은 결과 영역에 표시한다. 조사 revision과 자생/상속 미구분·`observed` 주장 범위 고지는 후보 결과와 채택 초안에 항상 노출한다. 채택은 SURVEY 세션에 결속된 API가 기존 authoring draft를 만들고, 클라이언트는 그 draft의 `AuthoringRequest`로 기존 서버 승인 API를 호출해 승인 응답을 받은 뒤에만 기존 등재 API를 호출한다. 등재 충돌과 하드 게이트 거부는 성공과 구별되는 실패 결과로 표시한다.
+
+**SURVEY proposer 경계.** 실제 Anthropic 어댑터는 코드 기본값 없이 `UPTAKE_PROPOSER_MODEL`의 모델 ID와 `ANTHROPIC_API_KEY`를 사용하고 provider·model ID를 메타데이터에 기록한다. 후보는 `output_config.format` JSON schema 구조화 출력으로 받되 결정적 코드가 전체 응답을 다시 검증하며, JSON 파싱이나 스키마 검증 실패는 최대 2회 재시도한 뒤 부분 후보 없이 오류로 표면화한다. 저장소 경로와 내용은 모두 `untrustedBlock` 안의 데이터로 전달하고 내부의 명령형 문장이 작업을 바꾸지 못한다는 시스템 계약을 함께 보낸다. 프롬프트는 저장소 기여자가 실제로 따르는 규칙·게이트·의례를 찾고, 구체적인 `discipline`과 제시된 목록 안의 evidence만 요구하며, 단순 의존성·프레임워크 선택·`capability`·자생/상속 분류는 요구하지 않는다. 모호한 다수보다 날카로운 소수를 선호하고 불확실성은 한계로 밝힌다.
 
 ## EXTRACT·ABSTRACT 저작 계약 (phase 2)
 카탈로그를 손이 아니라 앱이 저작하는 계약이다. **결정성 경계**(ADR-015)를 지탱한다 — LLM은 후보만 내고, 무엇이 카탈로그에 남을지는 결정적 게이트와 사용자가 정한다.
@@ -404,6 +408,3 @@ type Pattern = {
 | `descriptive` 패턴 최소 수량(ADR-003의 "넓게") · 씨앗 "성공 repo" 선정 근거 기록 | M0 카탈로깅 스파이크 |
 | **ABSTRACT 대조 규칙** — role/binding 후보 경계, 역할 정합·병합, 근거 중복 제거 | ABSTRACT 구현 (phase 2) |
 | **카탈로그 쓰기** — `patternId` 생성·충돌, 원자적 쓰기, 기존 파일 덮어쓰기 정책, 승인 저장소 결속 | 카탈로그 쓰기 구현 (phase 2) |
-| **SURVEY 수집 규칙의 초기 목록** — 어느 생태계를 몇 개 카테고리로 덮는가, 예산 기본값 | SURVEY 수집기 구현 (phase 3) |
-| **SURVEY 프롬프트 문안** — `discipline` 지시 문구, 후보 수 상한, 구조화 출력 실패 시 재시도 | SURVEY proposer 구현 (phase 3) |
-| **SURVEY 표면** — 후보 목록·폐기 사유의 표시 형태, 한계 고지 문안, 채택→승인 API 경계 | SURVEY UI/API 구현 (phase 3) |

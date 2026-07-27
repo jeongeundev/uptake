@@ -1,0 +1,17 @@
+{
+  "cycle": 1,
+  "decisions": {
+    "F-001": {
+      "category": "contract_violation",
+      "evidence": "src/lib/engine/survey.ts의 candidates.length===0 분기는 discardedEvidence/discardedCandidates를 버린 일반 no-candidate만 반환하고, src/services/survey-service.ts도 detail만 전달한다. ARCHITECTURE SURVEY 환각 폐기 계약의 사유·경로 표시 요구 위반이 실재한다."
+    },
+    "F-002": {
+      "category": "contract_violation",
+      "evidence": "src/services/proposer-anthropic.ts의 3회 소진은 일반 Error이며 src/app/api/survey/route.ts는 구성 오류만 구조화한다. src/components/survey-wizard.tsx의 postJson/investigate는 JSON parse rejection을 처리하지 않아 busy 해제와 명시적 오류 표면화 계약이 성립하지 않는다."
+    },
+    "F-003": {
+      "category": "contract_violation",
+      "evidence": "src/lib/engine/survey-adopt.ts가 initialRequest.sources[0].independenceGroup에 정규화 sourceId를 저장한다. ARCHITECTURE AuthoringRequest 자동 조립표는 저장소 식별자 그대로를 고정하므로 직렬화 계약 위반이 실재한다."
+    }
+  }
+}

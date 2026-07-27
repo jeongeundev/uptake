@@ -313,6 +313,18 @@ describe("loadCatalog", () => {
     expect(rejectionReason(fixture)).toBe("evidence-invalid");
   });
 
+  it("rejects an independence group that is not a kebab-case id", () => {
+    writePattern(fixture, {
+      ...fixture.pattern,
+      sources: fixture.pattern.sources.map((source, index) => ({
+        ...source,
+        independenceGroup: `fixtures/${index + 1}/repo`,
+      })),
+    });
+
+    expect(rejectionReason(fixture)).toBe("schema-invalid");
+  });
+
   it("rejects corroborated evidence without a non-target stack", () => {
     writePattern(fixture, {
       ...fixture.pattern,

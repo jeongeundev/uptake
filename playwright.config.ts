@@ -20,12 +20,18 @@ const fixture =
         root: requiredEnvironment("UPTAKE_E2E_FIXTURE_ROOT"),
         catalogDir: requiredEnvironment("UPTAKE_CATALOG_DIR"),
         sourceRoot: requiredEnvironment("UPTAKE_SOURCE_ROOT"),
+        surveyRepository: requiredEnvironment(
+          "UPTAKE_E2E_SURVEY_REPOSITORY",
+        ),
         targetRoot: requiredEnvironment("UPTAKE_E2E_TARGET_ROOT"),
         authoringTargetRoot: requiredEnvironment(
           "UPTAKE_E2E_AUTHORING_TARGET_ROOT",
         ),
         proposerStubScript: requiredEnvironment(
           "UPTAKE_PROPOSER_STUB_SCRIPT",
+        ),
+        surveyProposerStubScript: requiredEnvironment(
+          "UPTAKE_SURVEY_PROPOSER_STUB_SCRIPT",
         ),
         unresolvedProposerStubScript: requiredEnvironment(
           "UPTAKE_UNRESOLVED_PROPOSER_STUB_SCRIPT",
@@ -38,8 +44,11 @@ process.env.UPTAKE_CATALOG_DIR = fixture.catalogDir;
 process.env.UPTAKE_SOURCE_ROOT = fixture.sourceRoot;
 process.env.UPTAKE_E2E_TARGET_ROOT = fixture.targetRoot;
 process.env.UPTAKE_E2E_AUTHORING_TARGET_ROOT = fixture.authoringTargetRoot;
+process.env.UPTAKE_E2E_SURVEY_REPOSITORY = fixture.surveyRepository;
 process.env.UPTAKE_PROPOSER = "stub";
 process.env.UPTAKE_PROPOSER_STUB_SCRIPT = fixture.proposerStubScript;
+process.env.UPTAKE_SURVEY_PROPOSER_STUB_SCRIPT =
+  fixture.surveyProposerStubScript;
 process.env.UPTAKE_UNRESOLVED_PROPOSER_STUB_SCRIPT =
   fixture.unresolvedProposerStubScript;
 
@@ -69,6 +78,8 @@ export default defineConfig({
       UPTAKE_SOURCE_ROOT: fixture.sourceRoot,
       UPTAKE_PROPOSER: "stub",
       UPTAKE_PROPOSER_STUB_SCRIPT: fixture.proposerStubScript,
+      UPTAKE_SURVEY_PROPOSER_STUB_SCRIPT:
+        fixture.surveyProposerStubScript,
     },
     reuseExistingServer: false,
     timeout: 120_000,

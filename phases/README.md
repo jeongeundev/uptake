@@ -31,6 +31,7 @@
 | `2-authoring-pipeline-step-3-fix-c1` | `remediation/archive/2-authoring-pipeline-step-3` | **보관 루프 소산** |
 | `2-authoring-pipeline-step-7-fix-c1` | `remediation/archive/2-authoring-pipeline-step-7` | **보관 루프 소산** |
 | `2-authoring-pipeline-step-8-fix-c1` | `remediation/archive/2-authoring-pipeline-step-8` | **보관 루프 소산** |
+| `3-survey-fix-c1` | `remediation/archive/3-survey` | **보관 루프 소산** — 자기채점 |
 
 보관 루프 소산인 세 개도 **실제 커밋을 만든 실행 기록**이라 지우거나 옮기지 않았다. 루프 자체가
 무효라는 것과 그 루프가 고친 코드가 무효라는 것은 별개다 — step-3·step-7이 잡은 major는 실제로

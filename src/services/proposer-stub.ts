@@ -7,7 +7,10 @@ import type {
   NarrativeRequest,
   Proposer,
   ProposerMetadata,
+  SurveyProposer,
+  SurveyRequest,
 } from "@/services/proposer";
+import type { SurveyCandidate } from "@/types/survey";
 
 export type StubProposerScript = {
   metadata?: ProposerMetadata;
@@ -63,6 +66,29 @@ export function createStubProposer(
       return typeof response === "function"
         ? response(request)
         : (response ?? { violation: "", tradeoffs: "" });
+    },
+  };
+}
+
+export type StubSurveyScript = {
+  metadata?: ProposerMetadata;
+  candidates: SurveyCandidate[];
+};
+
+export function createStubSurveyProposer(
+  script: StubSurveyScript,
+): SurveyProposer & { calls: SurveyRequest[] } {
+  const calls: SurveyRequest[] = [];
+
+  return {
+    metadata: script.metadata ?? {
+      providerId: "stub",
+      modelId: "deterministic-stub",
+    },
+    calls,
+    async proposeSurveyCandidates(request) {
+      calls.push(request);
+      return script.candidates;
     },
   };
 }

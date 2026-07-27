@@ -2,14 +2,79 @@
   "project": "uptake",
   "phase": "3-survey",
   "steps": [
-    { "step": 0, "name": "survey-rules", "status": "pending" },
-    { "step": 1, "name": "survey-collect", "status": "pending" },
-    { "step": 2, "name": "survey-port", "status": "pending" },
-    { "step": 3, "name": "survey-engine", "status": "pending" },
-    { "step": 4, "name": "survey-adopt", "status": "pending" },
-    { "step": 5, "name": "survey-api", "status": "pending" },
-    { "step": 6, "name": "survey-proposer-adapter", "status": "pending" },
-    { "step": 7, "name": "survey-ui", "status": "pending" },
-    { "step": 8, "name": "survey-e2e", "status": "pending" }
-  ]
+    {
+      "step": 0,
+      "name": "survey-rules",
+      "status": "completed",
+      "started_at": "2026-07-27T02:00:04+0900",
+      "summary": "8개 카테고리의 동봉 수집 규칙 데이터와 엄격한 정규식 로더를 추가했다.",
+      "completed_at": "2026-07-27T02:03:41+0900"
+    },
+    {
+      "step": 1,
+      "name": "survey-collect",
+      "status": "completed",
+      "started_at": "2026-07-27T02:03:41+0900",
+      "summary": "고정 revision에서 규칙별 라운드로빈과 문자 예산을 적용해 신호 파일을 결정적으로 수집하는 엔진을 추가했다.",
+      "completed_at": "2026-07-27T02:08:34+0900"
+    },
+    {
+      "step": 2,
+      "name": "survey-port",
+      "status": "completed",
+      "started_at": "2026-07-27T02:08:34+0900",
+      "summary": "SURVEY 후보 타입과 별도 proposer 포트, 적대적 후보를 그대로 전달하는 결정적 스텁을 추가했다.",
+      "completed_at": "2026-07-27T02:11:23+0900"
+    },
+    {
+      "step": 3,
+      "name": "survey-engine",
+      "status": "completed",
+      "started_at": "2026-07-27T02:11:23+0900",
+      "summary": "고정 revision의 수집 파일만 근거로 허용하고 형태 불량·중복·환각 후보의 폐기 사유를 보존하는 SURVEY 엔진을 추가했다.",
+      "completed_at": "2026-07-27T02:15:45+0900"
+    },
+    {
+      "step": 4,
+      "name": "survey-adopt",
+      "status": "completed",
+      "started_at": "2026-07-27T02:15:45+0900",
+      "summary": "선택한 SURVEY 근거를 재제안 없이 단일 observed/descriptive 패턴으로 결정적으로 조립하는 채택 경로를 추가했다.",
+      "completed_at": "2026-07-27T02:20:53+0900"
+    },
+    {
+      "step": 5,
+      "name": "survey-api",
+      "status": "completed",
+      "started_at": "2026-07-27T02:20:53+0900",
+      "summary": "SURVEY 조사·채택을 세션 결속 저장소와 Route Handler로 연결하고 기존 저작 승인·등재 경로를 재사용했다.",
+      "completed_at": "2026-07-27T02:30:11+0900"
+    },
+    {
+      "step": 6,
+      "name": "survey-proposer-adapter",
+      "status": "completed",
+      "started_at": "2026-07-27T02:30:11+0900",
+      "summary": "구조화 출력·결정적 재검증·불신 경계를 갖춘 Anthropic SURVEY proposer를 실제 API 선택 경로에 연결했다.",
+      "completed_at": "2026-07-27T02:35:12+0900"
+    },
+    {
+      "step": 7,
+      "name": "survey-ui",
+      "status": "completed",
+      "started_at": "2026-07-27T02:35:12+0900",
+      "summary": "SURVEY를 제품 첫 화면에 연결하고 후보 근거·폐기 사유·revision·한계와 서버 승인 기반 등재 흐름을 구현했다.",
+      "completed_at": "2026-07-27T02:43:45+0900"
+    },
+    {
+      "step": 8,
+      "name": "survey-e2e",
+      "status": "completed",
+      "started_at": "2026-07-27T02:43:45+0900",
+      "summary": "저장소 조사부터 후보 채택·등재·카탈로그 재조회까지 환각 폐기와 씨앗 불변을 포함한 결정적 브라우저 E2E를 추가했다.",
+      "completed_at": "2026-07-27T03:04:26+0900"
+    }
+  ],
+  "created_at": "2026-07-27T02:00:04+0900",
+  "completed_at": "2026-07-27T03:04:26+0900"
 }
