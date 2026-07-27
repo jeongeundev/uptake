@@ -11,6 +11,14 @@
 그 루프의 스킬·엔진(`.agents/skills/remediate/`·`scripts/remediate.py`)은 제거됐고, 산출물(`remediation/`)과
 아래 디렉터리는 실제 커밋을 만든 실행 기록이라 남겼다.
 
+**아래 phase들의 step 파일에는 죽은 참조가 남아 있다** — `$remediate` 호출, `.agents/skills/remediate/CONTRACT.md`,
+`scripts/remediate.py`, `scripts/fixtures/remediation/*.json`. 전부 2026-07-27에 제거된 것들이다.
+해당 디렉터리: `remediate-loop` · `2-authoring-pipeline` · `2-authoring-pipeline-final-fix-c1` ·
+`2-authoring-pipeline-step-8-fix-c1` · `3-survey` · `3-survey-fix-c1`.
+step 파일은 실행 당시의 지시문 기록이라 소급 수정하지 않는다. 다만 `scripts/execute.py`의 `_invoke_agent`가
+step 파일 **전문을 프롬프트에 붙이므로**, 위 phase의 step을 `pending`으로 되돌려 재실행하면 폐지된 지시가
+그대로 주입된다. 전부 `completed`인 동안은 실행기가 에이전트를 다시 부르지 않아 무해하다 — 되돌리지 마라.
+
 `step*-output.json`은 step 실행기의 raw 로그이며 `.gitignore` 대상이다(로컬에만 존재).
 실행기가 실패했을 때 **진짜 원인이 남는 유일한 곳**이므로, 중단 시 `index.json`의 `error_message`가 아니라 이 파일의 `stderr`를 본다.
 
@@ -20,10 +28,10 @@
 |---|---|
 | `0-mvp` | 엔진 — INSTANTIATE·VERIFY |
 | `0-fix` · `0-fix2` | 0-mvp 리뷰 후속 |
-| `remediate-loop` | `/remediate` 하네스 자체 구축 |
+| `remediate-loop` | `/remediate` 하네스 자체 구축 — **역사**: 만든 것이 2026-07-27에 제거됐다 |
 | `1-ui-vertical-slice` | UI·API·E2E 수직 슬라이스 |
 | `2-authoring-pipeline` | 저작 파이프라인 (EXTRACT·ABSTRACT) step 0~9 |
-| `2-fix` | `-final` 루프 F-001 해소 — `draft-store` 계약 변경 |
+| `2-fix` | `-final` 루프 F-001 해소 — `draft-store` 계약 변경 (**역사**: remediation 루프가 촉발한 phase) |
 | `3-survey` | 발견 (SURVEY) — 저장소 1개 → 후보 → `observed`/`descriptive` 등재 step 0~8 |
 
 ## fix phase (역사 — 더 만들지 않는다)

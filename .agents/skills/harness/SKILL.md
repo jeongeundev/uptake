@@ -161,7 +161,7 @@ execute.py가 자동으로 처리하는 것:
 
 - **exit 1 (error)**: step 구현이 3회 시도 후에도 실패했다. `phases/{task-name}/index.json`에서 해당 step의 `status`를 `"pending"`으로 바꾸고 `error_message`를 삭제한 뒤 재실행한다. 실패한 step의 반쪽 작업이 커밋돼 있을 수 있으니 `git log`로 확인한다.
 - **exit 2 (blocked)**: `blocked_reason`에 적힌 사유(API 키·인증·수동 설정)를 해결한 뒤, `status`를 `"pending"`으로 바꾸고 `blocked_reason`을 삭제한 뒤 재실행한다.
-- **exit 3 (하네스 오류)**: `claude`를 띄우지 못했다(쿼터 소진·CLI 부재·타임아웃). **index.json을 고치지 마라** — status는 이미 `pending`이고 커밋도 없다. 실제 원인은 `phases/{task-name}/step{N}-output.json`의 `stderr`에 있다. 원인 해소 후 같은 명령을 그대로 재실행하면 중단된 step부터 이어진다.
+- **exit 3 (하네스 오류)**: `claude`를 띄우지 못했다(쿼터 소진·CLI 부재·타임아웃). **index.json을 고치지 마라** — status는 이미 `pending`이고 커밋도 없다. 실제 원인은 `phases/{task-name}/step{N}-output.json`의 `stderr`에 있다. 원인 해소 후 같은 명령을 그대로 재실행하면 중단된 step부터 이어진다. 타임아웃이었다면 워킹트리에 반쪽 편집이 남아 있을 수 있다 — 실행기가 출력한 미커밋 목록을 보고 이어 쓸지 버릴지 먼저 정한다(그대로 두면 다음 성공 커밋에 함께 담긴다).
 
 step 실패가 아닌 것을 `error`로 기록하면 다음 실행이 `_check_blockers`에서 막히고, 진짜 실패와 구분이 사라진다.
 
