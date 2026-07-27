@@ -1,7 +1,13 @@
 # remediation 루프 대장
 
-`/remediate` 루프의 산출물이 루프별 디렉터리로 쌓인다. 계약 정본은
-[`.agents/skills/remediate/CONTRACT.md`](../.agents/skills/remediate/CONTRACT.md)다.
+> **폐지됨 (2026-07-27).** `/remediate` 루프는 더 이상 돌지 않는다. 스킬·계약·엔진
+> (`.agents/skills/remediate/`·`scripts/remediate.py`·`scripts/test_remediate.py`)은 제거했다.
+> 이 디렉터리와 `phases/*-fix-c*`는 **실제 커밋을 만든 실행 기록**이라 남긴다 — 읽기 전용이며 새로 쌓지 않는다.
+>
+> 대체: 리뷰는 `$review`가 독립 세션에서 한 번 돌고 **판정으로 끝난다**. 결과를 `phases/`로 되먹이지 않는다.
+> 폐지 이유는 이 문서가 기록한 사고 자체다 — 수정 루프를 phase로 만들면 재진입 지점이 생기고 루프가 갈라진다.
+
+아래는 루프가 돌던 시기의 산출물 기록이다.
 
 ## 명명 규칙
 
@@ -32,7 +38,7 @@ phase 2의 최종 상태는 `-final`의 Escalate가 아니라 **`2-fix`의 Ready
 
 `2-fix` phase에도 같은 사고가 한 번 더 일어났다. step 1 실행 중 구현 세션이 스스로
 `remediation/2-fix/` 루프와 `phases/2-fix-fix-c1/`을 만들어 돌렸다(커밋 `0182860`~`59a9243`).
-자기채점 리뷰는 계약상 무효이므로(ADR-008, `docs/HANDOFF.md` 8절) 두 디렉터리를 삭제해 loop-id를
+자기채점 리뷰는 계약상 무효이므로(ADR-008, `docs/HANDOFF.md` 「워크플로우 규약」) 두 디렉터리를 삭제해 loop-id를
 되찾았다. 그 루프가 지적한 `test-results/` ignore 누락은 정당한 발견이라 `.gitignore` 변경만 유지했다.
 step 파일에 리뷰·remediation 금지 항목이 빠진 것이 원인이라고 판단해 `/harness` 스킬의 step
 템플릿에 그 항목을 못박았다.
@@ -41,7 +47,7 @@ step 파일에 리뷰·remediation 금지 항목이 빠진 것이 원인이라�
 (`survey-e2e`) 세션이 코드를 쓴 뒤 `remediation/3-survey/` 루프와 `phases/3-survey-fix-c1/`을
 만들어 리뷰·triage·fix·closure review까지 돌리고 스스로 `state: "ready"`를 기록했다(커밋
 `8765641`~`972af01`, step 8의 코드 커밋과 output 커밋 **사이**에 끼어 있다). 이번에는 금지
-항목이 step 파일에 **있었다** — `scripts/execute.py:247`이 step 파일 전문을 프롬프트에 붙이므로
+항목이 step 파일에 **있었다** — `scripts/execute.py`의 `_invoke_agent`가 step 파일 전문을 프롬프트에 붙이므로
 세션은 그것을 받고도 어겼다. 하네스 결함이 아니라 세션의 규칙 위반이다.
 
 자기채점 판정은 계약상 무효이므로(ADR-008) 루프를 `archive/3-survey`로 옮겼다. 다만 그 루프가

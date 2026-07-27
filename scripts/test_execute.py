@@ -375,7 +375,7 @@ class TestCheckoutBranch:
         ])
         with pytest.raises(SystemExit) as exc_info:
             executor._checkout_branch()
-        assert exc_info.value.code == 1
+        assert exc_info.value.code == 3   # git 문제는 step 구현 실패가 아니다
 
     def test_no_git_exits(self, executor):
         self._mock_git(executor, [
@@ -383,7 +383,7 @@ class TestCheckoutBranch:
         ])
         with pytest.raises(SystemExit) as exc_info:
             executor._checkout_branch()
-        assert exc_info.value.code == 1
+        assert exc_info.value.code == 3   # git 문제는 step 구현 실패가 아니다
 
 
 # ---------------------------------------------------------------------------
@@ -428,33 +428,39 @@ class TestCommitStep:
 
 
 # ---------------------------------------------------------------------------
-# _invoke_codex (mocked)
+# _invoke_agent (mocked)
 # ---------------------------------------------------------------------------
 
-class TestInvokeCodex:
-    def test_invokes_codex_with_correct_args(self, executor):
+class TestInvokeAgent:
+    @staticmethod
+    def _prompt_of(cmd):
+        return cmd[cmd.index("-p") + 1]
+
+    def test_invokes_claude_with_correct_args(self, executor):
         mock_result = MagicMock(returncode=0, stdout='{"result": "ok"}', stderr="")
         step = {"step": 2, "name": "ui"}
         preamble = "PREAMBLE\n"
 
         with patch("subprocess.run", return_value=mock_result) as mock_run:
-            output = executor._invoke_codex(step, preamble)
+            output = executor._invoke_agent(step, preamble)
 
         cmd = mock_run.call_args[0][0]
-        assert cmd[0] == "codex"
-        assert cmd[1] == "exec"
-        assert "--dangerously-bypass-approvals-and-sandbox" in cmd
-        assert "--dangerously-bypass-hook-trust" in cmd
-        assert "--json" in cmd
-        assert "PREAMBLE" in cmd[-1]
-        assert "UI를 구현하세요" in cmd[-1]
+        assert cmd[0] == "claude"
+        assert "-p" in cmd
+        assert cmd[cmd.index("--model") + 1] == "sonnet"
+        assert "--dangerously-skip-permissions" in cmd
+        assert cmd[cmd.index("--output-format") + 1] == "json"
+        # step 세션은 스킬을 호출할 수 없어야 한다 — 금지를 프롬프트에 맡기지 않는다.
+        assert "--disable-slash-commands" in cmd
+        assert "PREAMBLE" in self._prompt_of(cmd)
+        assert "UI를 구현하세요" in self._prompt_of(cmd)
 
     def test_saves_output_json(self, executor):
         mock_result = MagicMock(returncode=0, stdout='{"ok": true}', stderr="")
         step = {"step": 2, "name": "ui"}
 
         with patch("subprocess.run", return_value=mock_result):
-            executor._invoke_codex(step, "preamble")
+            executor._invoke_agent(step, "preamble")
 
         output_file = executor._phase_dir / "step2-output.json"
         assert output_file.exists()
@@ -464,19 +470,177 @@ class TestInvokeCodex:
         assert data["exitCode"] == 0
 
     def test_nonexistent_step_file_exits(self, executor):
+        """step 파일이 없으면 실행기를 띄울 수조차 없다 = 하네스 오류."""
         step = {"step": 99, "name": "nonexistent"}
         with pytest.raises(SystemExit) as exc_info:
-            executor._invoke_codex(step, "preamble")
-        assert exc_info.value.code == 1
+            executor._invoke_agent(step, "preamble")
+        assert exc_info.value.code == 3
 
     def test_timeout_is_1800(self, executor):
         mock_result = MagicMock(returncode=0, stdout="{}", stderr="")
         step = {"step": 2, "name": "ui"}
 
         with patch("subprocess.run", return_value=mock_result) as mock_run:
-            executor._invoke_codex(step, "preamble")
+            executor._invoke_agent(step, "preamble")
 
         assert mock_run.call_args[1]["timeout"] == 1800
+
+    def test_timeout_becomes_nonzero_exit(self, executor):
+        """타임아웃은 스택트레이스로 죽지 않고 실행기 실패로 보고된다."""
+        step = {"step": 2, "name": "ui"}
+
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("claude", 1800)):
+            output = executor._invoke_agent(step, "preamble")
+
+        assert output["exitCode"] != 0
+        assert "1800" in output["stderr"]
+
+    def test_missing_cli_becomes_nonzero_exit(self, executor):
+        """claude가 PATH에 없어도 스택트레이스가 아니라 실행기 실패로 보고된다."""
+        step = {"step": 2, "name": "ui"}
+
+        with patch("subprocess.run", side_effect=FileNotFoundError("claude")):
+            output = executor._invoke_agent(step, "preamble")
+
+        assert output["exitCode"] != 0
+        assert "claude" in output["stderr"]
+
+
+# ---------------------------------------------------------------------------
+# harness-error — 실행기를 못 띄운 것은 step 실패가 아니다
+# ---------------------------------------------------------------------------
+
+class TestHarnessError:
+    """쿼터 소진·CLI 부재 등 실행기 자체의 실패를 step 실패와 분리한다.
+
+    AGENTS.md의 gate-error 원칙과 같은 모양: 실행기를 못 돌린 것을
+    '구현이 실패했다'로 계산하면 안 된다.
+    """
+
+    @staticmethod
+    def _stub_agent(executor, exit_code, calls=None):
+        """_invoke_agent 대역 — index.json의 status는 건드리지 않는다."""
+        def fake(step, preamble):
+            if calls is not None:
+                calls.append(preamble)
+            return {
+                "step": step["step"], "name": step["name"],
+                "exitCode": exit_code, "stdout": "", "stderr": "quota exhausted",
+            }
+        return patch.object(executor, "_invoke_agent", side_effect=fake)
+
+    @staticmethod
+    def _step_entry(executor, num=2):
+        index = json.loads(executor._index_file.read_text())
+        return next(s for s in index["steps"] if s["step"] == num)
+
+    def test_exits_3_and_leaves_step_pending(self, executor):
+        step = {"step": 2, "name": "ui"}
+        with self._stub_agent(executor, 1), patch.object(executor, "_commit_step") as commit:
+            with pytest.raises(SystemExit) as exc_info:
+                executor._execute_single_step(step, "guardrails")
+
+        assert exc_info.value.code == 3
+        entry = self._step_entry(executor)
+        assert entry["status"] == "pending"       # 재실행하면 그대로 이어진다
+        assert "error_message" not in entry
+        commit.assert_not_called()                # 반쪽 작업을 커밋하지 않는다
+
+    def test_does_not_burn_retries(self, executor):
+        """쿼터가 소진된 상태에서 3회 헛도는 낭비를 막는다."""
+        calls = []
+        step = {"step": 2, "name": "ui"}
+        with self._stub_agent(executor, 1, calls), patch.object(executor, "_commit_step"):
+            with pytest.raises(SystemExit):
+                executor._execute_single_step(step, "guardrails")
+
+        assert len(calls) == 1
+
+    def test_leaves_top_index_untouched(self, executor, top_index):
+        step = {"step": 2, "name": "ui"}
+        with self._stub_agent(executor, 1), patch.object(executor, "_commit_step"):
+            with pytest.raises(SystemExit):
+                executor._execute_single_step(step, "guardrails")
+
+        top = json.loads(top_index.read_text())
+        assert top["phases"][0]["status"] == "pending"   # phase가 실패한 게 아니다
+
+    def test_clean_exit_without_status_update_still_retries(self, executor):
+        """exit 0인데 status 미갱신 = 에이전트는 돌았다 → 기존 재시도 경로 유지."""
+        calls = []
+        step = {"step": 2, "name": "ui"}
+        with self._stub_agent(executor, 0, calls), patch.object(executor, "_commit_step"):
+            with pytest.raises(SystemExit) as exc_info:
+                executor._execute_single_step(step, "guardrails")
+
+        assert exc_info.value.code == 1
+        assert len(calls) == ex.StepExecutor.MAX_RETRIES
+        assert self._step_entry(executor)["status"] == "error"
+
+    @staticmethod
+    def _stub_git_status(executor, porcelain):
+        """_run_git 대역 — `status --porcelain`만 응답한다."""
+        def fake(*args):
+            out = porcelain if args[:2] == ("status", "--porcelain") else ""
+            return subprocess.CompletedProcess(list(args), 0, stdout=out, stderr="")
+        return patch.object(executor, "_run_git", side_effect=fake)
+
+    def test_warns_about_uncommitted_leftovers(self, executor, capsys):
+        """타임아웃은 에이전트가 파일을 고친 **뒤** 터진다 — 남은 편집을 알려야 한다.
+
+        커밋을 막아도 워킹트리 잔재는 그대로 남고, 재실행 후 다음 성공 커밋의
+        `git add -A`가 그것을 함께 담는다. 커밋을 막은 취지가 한 step 뒤로
+        밀릴 뿐이므로, 최소한 무엇이 남았는지는 보여야 한다.
+        """
+        step = {"step": 2, "name": "ui"}
+        with self._stub_agent(executor, -1), \
+             self._stub_git_status(executor, " M src/app.ts\n?? src/new.ts\n"), \
+             patch.object(executor, "_commit_step"):
+            with pytest.raises(SystemExit) as exc_info:
+                executor._execute_single_step(step, "guardrails")
+
+        assert exc_info.value.code == 3
+        out = capsys.readouterr().out
+        assert "커밋되지 않은" in out
+        assert "src/app.ts" in out
+        assert "src/new.ts" in out
+
+    def test_no_leftover_warning_when_tree_is_clean(self, executor, capsys):
+        """쿼터 소진·CLI 부재는 작업 전 실패다 — 잔재가 없으면 경고도 없다."""
+        step = {"step": 2, "name": "ui"}
+        with self._stub_agent(executor, -1), \
+             self._stub_git_status(executor, ""), \
+             patch.object(executor, "_commit_step"):
+            with pytest.raises(SystemExit):
+                executor._execute_single_step(step, "guardrails")
+
+        assert "커밋되지 않은" not in capsys.readouterr().out
+
+    def test_phase_bookkeeping_is_not_a_leftover(self, executor, capsys):
+        """index.json은 하네스 자신이 쓴다(started_at) — 잔재로 세면 매번 거짓 경보다."""
+        step = {"step": 2, "name": "ui"}
+        with self._stub_agent(executor, -1), \
+             self._stub_git_status(executor, " M phases/0-mvp/index.json\n"), \
+             patch.object(executor, "_commit_step"):
+            with pytest.raises(SystemExit):
+                executor._execute_single_step(step, "guardrails")
+
+        assert "커밋되지 않은" not in capsys.readouterr().out
+
+    def test_nonzero_exit_with_completed_status_is_success(self, executor):
+        """status를 completed로 쓴 뒤 비정상 종료한 경우는 성공으로 본다."""
+        def fake(step, preamble):
+            index = json.loads(executor._index_file.read_text())
+            for s in index["steps"]:
+                if s["step"] == 2:
+                    s["status"] = "completed"
+            executor._index_file.write_text(json.dumps(index, ensure_ascii=False))
+            return {"step": 2, "name": "ui", "exitCode": 1, "stdout": "", "stderr": ""}
+
+        step = {"step": 2, "name": "ui"}
+        with patch.object(executor, "_invoke_agent", side_effect=fake), \
+             patch.object(executor, "_commit_step"):
+            assert executor._execute_single_step(step, "guardrails") is True
 
 
 # ---------------------------------------------------------------------------
@@ -509,11 +673,12 @@ class TestMainCli:
             assert exc_info.value.code == 2  # argparse exits with 2
 
     def test_invalid_phase_dir_exits(self):
+        """phase 디렉터리가 없는 것은 step 구현 실패가 아니다 = 하네스 오류."""
         with patch("sys.argv", ["execute.py", "nonexistent"]):
             with patch.object(ex, "ROOT", Path("/tmp/fake_nonexistent")):
                 with pytest.raises(SystemExit) as exc_info:
                     ex.main()
-                assert exc_info.value.code == 1
+                assert exc_info.value.code == 3
 
     def test_missing_index_exits(self, tmp_project):
         (tmp_project / "phases" / "empty").mkdir()
@@ -521,7 +686,49 @@ class TestMainCli:
             with patch.object(ex, "ROOT", tmp_project):
                 with pytest.raises(SystemExit) as exc_info:
                     ex.main()
-                assert exc_info.value.code == 1
+                assert exc_info.value.code == 3
+
+    def test_unexpected_exception_becomes_harness_error(self, tmp_project, phase_dir):
+        """예상 못 한 예외가 트레이스백으로 죽으면 파이썬이 exit 1을 낸다 —
+        이 저장소 계약에서 1은 'step 실패'이므로 하네스 오류가 오분류된다.
+        트레이스백은 그대로 보이되 종료코드만 3으로 옮긴다(삼키지 않는다).
+        """
+        with patch("sys.argv", ["execute.py", "0-mvp"]):
+            with patch.object(ex, "ROOT", tmp_project):
+                with patch.object(ex.StepExecutor, "run", side_effect=PermissionError("denied")):
+                    with pytest.raises(SystemExit) as exc_info:
+                        ex.main()
+                    assert exc_info.value.code == 3
+
+
+# ---------------------------------------------------------------------------
+# _finalize (mocked git)
+# ---------------------------------------------------------------------------
+
+class TestFinalize:
+    """마감 단계의 실패는 step 구현 실패가 아니다 — step은 이미 전부 통과했다."""
+
+    @staticmethod
+    def _mock_git(executor, failing_verb):
+        def fake(*args):
+            rc = 1 if args[0] == failing_verb else 0
+            return subprocess.CompletedProcess(list(args), rc, stdout="", stderr="denied")
+        return patch.object(executor, "_run_git", side_effect=fake)
+
+    def test_push_failure_exits_3(self, executor, top_index):
+        executor._auto_push = True
+        with self._mock_git(executor, "push"):
+            with pytest.raises(SystemExit) as exc_info:
+                executor._finalize()
+        assert exc_info.value.code == 3
+
+    def test_branch_resolve_failure_exits_3(self, executor, top_index):
+        executor._auto_push = True
+        executor._use_current_branch = True
+        with self._mock_git(executor, "rev-parse"):
+            with pytest.raises(SystemExit) as exc_info:
+                executor._finalize()
+        assert exc_info.value.code == 3
 
 
 # ---------------------------------------------------------------------------

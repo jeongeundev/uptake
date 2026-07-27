@@ -27,7 +27,7 @@ phase 0(엔진 INSTANTIATE·VERIFY) · phase 1(UI/API/E2E) · phase 2(저작 파
 
 remediation 이력은 `remediation/README.md`가 정본이다. 요약: `2-authoring-pipeline-final` 루프가 F-001(major, `draft-store` 계약 결함)로 Escalate했고, `/harness`의 `2-fix` phase가 초안을 `hashAuthoringRequest` fingerprint에 결속해 해결했다. `2-fix` 루프 판정 **Ready**(score 100, open findings 0).
 
-**루프를 다시 열지 마라** — `$remediate feat-2-authoring-pipeline`은 이미 돌았다. 새 구현이 들어가기 전까지 재리뷰 대상이 없다.
+**remediation 루프는 2026-07-27자로 폐지됐다.** 스킬·엔진(`.agents/skills/remediate/`·`scripts/remediate.py`)은 제거했고, 위 이력과 `remediation/`·`phases/*-fix-c*`는 실행 기록으로만 남는다. 리뷰는 이제 `$review`가 독립 세션에서 **한 번** 돌고 판정으로 끝난다 — 결과를 phase로 되먹이지 않는다.
 
 ## 3. phase 3 방향 — 제품 루트 재정의 (전제 검증 완료, 문서 재정의 대기)
 
@@ -80,7 +80,7 @@ phase 2까지의 제품은 **사용자가 intent(찾을 방법론)를 지정할 
 
 | 결함 | 놓친 것 |
 |---|---|
-| `automation` 규칙 부재 | `execute.py`·`remediate.py` — 최종 후보 9건 중 5건의 근거 |
+| `automation` 규칙 부재 | `execute.py`·`remediate.py`(당시 존재, 2026-07-27 제거) — 최종 후보 9건 중 5건의 근거 |
 | 문서 규칙이 `.md`만 인식 | `CONTRIBUTING.rst`, `doc/` 전체 (생태계 편향) |
 | 한 카테고리가 예산 독식 | `.pre-commit-config.yaml`, `tox.ini` (규모 대응) |
 
@@ -148,6 +148,8 @@ phase 2까지의 제품은 **사용자가 intent(찾을 방법론)를 지정할 
 ## 5. 워크플로우 규약
 
 - 구현 phase: `/harness`로 step 설계 → `python3 scripts/execute.py <phase-dir>`
-- 리뷰: phase 구현이 **전부 끝난 뒤** `$remediate <loop-id>` 한 번. **step 단위 루프를 만들지 마라** — phase 2에서 루프가 7개로 갈라진 사고의 원인이다(`remediation/README.md`).
-- 자기채점 리뷰는 계약상 무효다(ADR-008). 구현 세션이 스스로 remediation 루프를 열지 않는다.
-- 에러 복구: `phases/<phase>/index.json`에서 해당 step의 `status`를 `"pending"`으로 되돌리고 `error_message`를 삭제한 뒤 재실행.
+- 리뷰: phase 구현이 **전부 끝난 뒤 독립 세션에서** 한 번 — 범용은 내장 `/code-review <base>`, uptake 고유 검증 축(성공 위장·provenance)은 `$review <base>`. 판정만 하고 끝난다 — **리뷰 결과를 `phases/`로 되먹이지 마라**(phase 2에서 루프가 7개로 갈라진 사고의 원인: `remediation/README.md`).
+- 자기채점 리뷰는 무효다(ADR-008). step 실행기가 `--disable-slash-commands`로 스킬 호출 능력을 제거해 구현 세션이 자기 리뷰를 열지 못하게 한다.
+- 에러 복구는 **종료코드로 갈린다**(정본: `.agents/skills/harness/SKILL.md`의 「에러 복구」).
+  - `exit 1`(step 실패): `phases/<phase>/index.json`에서 해당 step의 `status`를 `"pending"`으로 되돌리고 `error_message`를 삭제한 뒤 재실행.
+  - `exit 3`(하네스 오류): **index.json을 고치지 마라** — status는 이미 `pending`이고 커밋도 없다. 원인을 해소하고 같은 명령을 재실행한다. 타임아웃이었다면 실행기가 출력한 미커밋 목록을 먼저 확인한다.

@@ -24,7 +24,7 @@ description: uptake 저장소의 Harness 워크플로우로 구현 계획을 세
 설계 원칙:
 
 1. **Scope 최소화** — 하나의 step에서 하나의 레이어 또는 모듈만 다룬다. 여러 모듈을 동시에 수정해야 하면 step을 쪼갠다.
-2. **자기완결성** — 각 step 파일은 독립된 Codex 세션에서 실행된다. "이전 대화에서 논의한 바와 같이" 같은 외부 참조는 금지한다. 필요한 정보는 전부 파일 안에 적는다.
+2. **자기완결성** — 각 step 파일은 독립된 에이전트 세션에서 실행된다(`claude -p` 1회 = 세션 1개). "이전 대화에서 논의한 바와 같이" 같은 외부 참조는 금지한다. 필요한 정보는 전부 파일 안에 적는다.
 3. **사전 준비 강제** — 관련 문서 경로와 이전 step에서 생성/수정된 파일 경로를 명시한다. 세션이 코드를 읽고 맥락을 파악한 뒤 작업하도록 유도한다.
 4. **시그니처 수준 지시** — 함수/클래스의 인터페이스만 제시하고 내부 구현은 에이전트 재량에 맡긴다. 단, 설계 의도에서 벗어나면 안 되는 핵심 규칙(멱등성, 보안, 데이터 무결성 등)은 반드시 명시한다.
 5. **AC는 실행 가능한 커맨드** — "~가 동작해야 한다" 같은 추상적 서술이 아닌 `npm run build && npm test` 같은 실제 실행 가능한 검증 커맨드를 포함한다.
@@ -80,9 +80,9 @@ description: uptake 저장소의 Harness 워크플로우로 구현 계획을 세
 
 | 전이 | 기록되는 필드 | 기록 주체 |
 |------|-------------|----------|
-| → `completed` | `completed_at`, `summary` | Codex 세션 (summary), execute.py (timestamp) |
-| → `error` | `failed_at`, `error_message` | Codex 세션 (message), execute.py (timestamp) |
-| → `blocked` | `blocked_at`, `blocked_reason` | Codex 세션 (reason), execute.py (timestamp) |
+| → `completed` | `completed_at`, `summary` | step 실행 세션 (summary), execute.py (timestamp) |
+| → `error` | `failed_at`, `error_message` | step 실행 세션 (message), execute.py (timestamp) |
+| → `blocked` | `blocked_at`, `blocked_reason` | step 실행 세션 (reason), execute.py (timestamp) |
 
 `summary`는 step 완료 시 산출물을 한 줄로 요약한 것으로, execute.py가 다음 step 프롬프트에 컨텍스트로 누적 전달한다. 따라서 다음 step에 유용한 정보(생성된 파일, 핵심 결정 등)를 담아야 한다.
 
@@ -131,13 +131,15 @@ npm test        # 테스트 통과
 ## 금지사항
 
 - {이 step에서 하지 말아야 할 것. "X를 하지 마라. 이유: Y" 형식}
-- **이 step 안에서 리뷰·remediation loop를 돌리지 마라. `$remediate` 호출, `scripts/execute.py` 재귀 실행, 새 phase 디렉터리 생성, `remediation/` 산출물 작성을 모두 포함한다. 이유: 코드를 쓴 세션이 스스로 리뷰하면 자기채점이다(ADR-008). 적대적 리뷰는 phase 완료 후 독립 세션의 `$remediate`가 맡는다.**
+- **새 phase 디렉터리를 만들거나 `scripts/execute.py`를 재귀 실행하지 마라. 이유: step은 자기 phase 안에서만 작업한다.**
 - 기존 테스트를 깨뜨리지 마라
 ```
 
-위 금지사항 중 **리뷰·remediation loop 금지 항목은 모든 step 파일에 빠짐없이 넣어라.** 빠뜨리면
-구현 세션이 step 실행 도중 자기 리뷰를 돌리고 중첩 fix phase까지 만들어, phase 이름과 loop-id가
-갈라진다(실제 사고 기록: [`remediation/README.md`](../../../remediation/README.md)).
+위 금지사항 중 **phase 생성·재귀 실행 금지 항목은 모든 step 파일에 넣어라.**
+
+step 세션의 스킬 호출 능력은 실행기가 `--disable-slash-commands`로 이미 제거한다(`scripts/execute.py`).
+금지를 프롬프트에만 맡기지 않는 이유는 실측 때문이다 — 능력이 남아 있으면 금지문이 있어도
+구현 세션이 step 도중 자기 리뷰를 돌리고 중첩 phase까지 만들었다(사고 기록: [`remediation/README.md`](../../../remediation/README.md)).
 
 ### E. 실행
 
@@ -155,22 +157,25 @@ execute.py가 자동으로 처리하는 것:
 - 2단계 커밋 — 코드 변경(`feat`)과 메타데이터(`chore`)를 분리 커밋
 - 타임스탬프 — started_at, completed_at, failed_at, blocked_at 자동 기록
 
-에러 복구:
+에러 복구 — **exit code로 원인을 구분한다. 뭉치지 마라.**
 
-- **error 발생 시**: `phases/{task-name}/index.json`에서 해당 step의 `status`를 `"pending"`으로 바꾸고 `error_message`를 삭제한 뒤 재실행한다.
-- **blocked 발생 시**: `blocked_reason`에 적힌 사유를 해결한 뒤, `status`를 `"pending"`으로 바꾸고 `blocked_reason`을 삭제한 뒤 재실행한다.
+- **exit 1 (error)**: step 구현이 3회 시도 후에도 실패했다. `phases/{task-name}/index.json`에서 해당 step의 `status`를 `"pending"`으로 바꾸고 `error_message`를 삭제한 뒤 재실행한다. 실패한 step의 반쪽 작업이 커밋돼 있을 수 있으니 `git log`로 확인한다.
+- **exit 2 (blocked)**: `blocked_reason`에 적힌 사유(API 키·인증·수동 설정)를 해결한 뒤, `status`를 `"pending"`으로 바꾸고 `blocked_reason`을 삭제한 뒤 재실행한다.
+- **exit 3 (하네스 오류)**: `claude`를 띄우지 못했다(쿼터 소진·CLI 부재·타임아웃). **index.json을 고치지 마라** — status는 이미 `pending`이고 커밋도 없다. 실제 원인은 `phases/{task-name}/step{N}-output.json`의 `stderr`에 있다. 원인 해소 후 같은 명령을 그대로 재실행하면 중단된 step부터 이어진다. 타임아웃이었다면 워킹트리에 반쪽 편집이 남아 있을 수 있다 — 실행기가 출력한 미커밋 목록을 보고 이어 쓸지 버릴지 먼저 정한다(그대로 두면 다음 성공 커밋에 함께 담긴다).
 
-### F. 구현 결과 검토 (Claude 자기점검)
+step 실패가 아닌 것을 `error`로 기록하면 다음 실행이 `_check_blockers`에서 막히고, 진짜 실패와 구분이 사라진다.
 
-먼저 phase가 실제로 닫혔는지 확인한다 — `phases/{task-name}/index.json`의 phase 레벨 `completed_at`과 `phases/index.json`의 `status: "completed"`가 둘 다 있어야 한다. 실행이 중간에 끊겨 누락됐으면 `python3 scripts/execute.py {task-name} --current-branch`를 다시 돌려 마감시킨다(pending step이 없으면 마감만 수행한다). 이 마감이 `/remediate` 개시 전제조건(계약 §2.1 P1·P2)이다.
+### F. 마감
 
-Phase가 completed로 끝나면 Claude가 구현 결과를 **한 번** 검토한다. 이것은 구현자 측 **자기점검**이지 독립 리뷰가 아니다 — 깊은 적대적 리뷰는 `/remediate` 입구의 **독립 Codex 리뷰**가 맡는다. 둘을 겹치지 마라.
+phase가 실제로 닫혔는지 확인한다 — `phases/{task-name}/index.json`의 phase 레벨 `completed_at`과 `phases/index.json`의 `status: "completed"`가 둘 다 있어야 한다. 실행이 중간에 끊겨 누락됐으면 `python3 scripts/execute.py {task-name} --current-branch`를 다시 돌려 마감시킨다(pending step이 없으면 마감만 수행한다).
 
-점검 항목:
+**여기서 끝이다. 리뷰는 이 스킬의 일이 아니다.**
 
-1. **설계 의도 부합** — step 문서가 요구한 것과 실제 산출물이 일치하는가? `git diff`로 변경 범위를 확인한다.
-2. **AC 증거** — 각 step의 `index.json` summary와 `output.json`에서 AC(build/test)가 실제로 통과했는지 본다. green만 보고 넘어가지 말고 성공 위장이 없는지 확인한다(ADR-008 정신).
-3. **CRITICAL 규칙** — AGENTS.md의 CRITICAL 규칙 위반이 없는가?
-4. **범위 이탈** — step에 없던 파일·기능이 생기지 않았는가?
+코드를 쓴 세션이 그 코드를 검토하면 자기채점이다(ADR-008). 구현 결과 검토는 **독립 세션에서** 한 번 돈다 — 이 세션에서 이어서 돌리지 마라. 사용자에게 phase 완료와 다음 단계를 보고하고 종료한다:
 
-발견한 문제는 사용자에게 보고한다. 표면적 수정이면 이 자리에서 고치고, **구조적이거나 finding이 여러 건이면 `/remediate` 루프로 넘긴다**(독립 리뷰 → triage → fix phase → 재리뷰 → Ready/Escalate).
+```
+/code-review <base>   # 범용 — 코딩 표준·스펙 대조·코드 스멜 (내장)
+$review <base>        # uptake 고유 — 성공 위장·provenance·반박 검증
+```
+
+리뷰 결과는 `phases/`로 되먹이지 않는다. **`phases/`에는 정방향 구현만 들어간다.** 리뷰가 지적한 것을 고칠지는 사용자가 정하고, 고친다면 그것은 새 작업이지 이 phase의 연장이 아니다.

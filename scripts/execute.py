@@ -14,6 +14,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import types
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -54,6 +55,8 @@ class StepExecutor:
     """Phase 디렉토리 안의 step들을 순차 실행하는 하네스."""
 
     MAX_RETRIES = 3
+    AGENT_MODEL = "sonnet"
+    TIMEOUT = 1800
     FEAT_MSG = "feat({phase}): step {num} — {name}"
     CHORE_MSG = "chore({phase}): step {num} output"
     TZ = timezone(timedelta(hours=9))
@@ -75,12 +78,12 @@ class StepExecutor:
 
         if not self._phase_dir.is_dir():
             print(f"ERROR: {self._phase_dir} not found")
-            sys.exit(1)
+            sys.exit(3)
 
         self._index_file = self._phase_dir / "index.json"
         if not self._index_file.exists():
             print(f"ERROR: {self._index_file} not found")
-            sys.exit(1)
+            sys.exit(3)
 
         idx = self._read_json(self._index_file)
         self._project = idx.get("project", "project")
@@ -127,7 +130,7 @@ class StepExecutor:
         if r.returncode != 0:
             print(f"  ERROR: git을 사용할 수 없거나 git repo가 아닙니다.")
             print(f"  {r.stderr.strip()}")
-            sys.exit(1)
+            sys.exit(3)
 
         if r.stdout.strip() == branch:
             return
@@ -139,9 +142,22 @@ class StepExecutor:
             print(f"  ERROR: 브랜치 '{branch}' checkout 실패.")
             print(f"  {r.stderr.strip()}")
             print(f"  Hint: 변경사항을 stash하거나 commit한 후 다시 시도하세요.")
-            sys.exit(1)
+            sys.exit(3)
 
         print(f"  Branch: {branch}")
+
+    def _uncommitted_paths(self) -> list:
+        """워킹트리에 남은 미커밋 경로. 하네스 자신이 쓰는 index.json은 뺀다.
+
+        `started_at` 기록만으로도 index.json은 항상 dirty하므로, 그것까지
+        세면 매번 거짓 경보가 되어 진짜 잔재가 묻힌다.
+        """
+        r = self._run_git("status", "--porcelain")
+        if r.returncode != 0:
+            return []
+        bookkeeping = f"phases/{self._phase_dir_name}/index.json"
+        paths = [line[3:] for line in r.stdout.splitlines() if len(line) > 3]
+        return [p for p in paths if p != bookkeeping]
 
     def _commit_step(self, step_num: int, step_name: str):
         output_rel = f"phases/{self._phase_dir_name}/step{step_num}-output.json"
@@ -234,34 +250,52 @@ class StepExecutor:
             f"   {commit_example}\n\n---\n\n"
         )
 
-    # --- Codex 호출 ---
+    # --- 에이전트 호출 ---
 
-    def _invoke_codex(self, step: dict, preamble: str) -> dict:
+    def _invoke_agent(self, step: dict, preamble: str) -> dict:
         step_num, step_name = step["step"], step["name"]
         step_file = self._phase_dir / f"step{step_num}.md"
 
         if not step_file.exists():
             print(f"  ERROR: {step_file} not found")
-            sys.exit(1)
+            sys.exit(3)
 
         prompt = preamble + step_file.read_text()
-        result = subprocess.run(
-            # 프로젝트 훅(.codex/hooks.json)은 신뢰 등록 전까지 조용히 무시된다.
-            # 헤드리스 실행에는 승인 UI가 없으므로 bypass로 강제 활성화한다.
-            ["codex", "exec", "--dangerously-bypass-approvals-and-sandbox",
-             "--dangerously-bypass-hook-trust", "--json", prompt],
-            cwd=self._root, capture_output=True, text=True, timeout=1800,
-        )
+        try:
+            result = subprocess.run(
+                # 헤드리스 실행에는 승인 UI가 없으므로 권한 확인을 우회한다.
+                # 훅(.claude/settings.json)은 이 플래그와 무관하게 그대로 걸린다 —
+                # tdd-guard와 stop-verify는 유지된다.
+                #
+                # --disable-slash-commands: step 세션에서 스킬 호출 능력을 제거한다.
+                # step은 "이 step에 명시된 작업만" 하므로 스킬이 필요 없고,
+                # 능력을 남겨두면 프롬프트 금지문만으로는 확률적으로 샌다.
+                ["claude", "-p", prompt,
+                 "--model", self.AGENT_MODEL,
+                 "--dangerously-skip-permissions",
+                 "--disable-slash-commands",
+                 "--output-format", "json"],
+                cwd=self._root, capture_output=True, text=True, timeout=self.TIMEOUT,
+            )
+            exit_code, stdout, stderr = result.returncode, result.stdout, result.stderr
+        except subprocess.TimeoutExpired:
+            exit_code, stdout, stderr = -1, "", f"실행기 타임아웃: {self.TIMEOUT}s 초과"
+        except FileNotFoundError:
+            exit_code, stdout, stderr = -1, "", "실행기를 찾을 수 없습니다: claude CLI가 PATH에 없습니다"
+        except OSError as e:
+            # 권한 부족·fd 고갈 등. 잡지 않으면 트레이스백으로 죽고 파이썬이
+            # exit 1을 내는데, 이 저장소 계약에서 1은 'step 실패'다.
+            exit_code, stdout, stderr = -1, "", f"실행기를 띄우지 못했습니다: {e!r}"
 
-        if result.returncode != 0:
-            print(f"\n  WARN: Codex가 비정상 종료됨 (code {result.returncode})")
-            if result.stderr:
-                print(f"  stderr: {result.stderr[:500]}")
+        if exit_code != 0:
+            print(f"\n  WARN: 에이전트가 비정상 종료됨 (code {exit_code})")
+            if stderr:
+                print(f"  stderr: {stderr[:500]}")
 
         output = {
             "step": step_num, "name": step_name,
-            "exitCode": result.returncode,
-            "stdout": result.stdout, "stderr": result.stderr,
+            "exitCode": exit_code,
+            "stdout": stdout, "stderr": stderr,
         }
         out_path = self._phase_dir / f"step{step_num}-output.json"
         with open(out_path, "w") as f:
@@ -319,12 +353,38 @@ class StepExecutor:
                 tag += f" [retry {attempt}/{self.MAX_RETRIES}]"
 
             with progress_indicator(tag) as pi:
-                self._invoke_codex(step, preamble)
+                output = self._invoke_agent(step, preamble)
                 elapsed = int(pi.elapsed)
 
             index = self._read_json(self._index_file)
             status = next((s.get("status", "pending") for s in index["steps"] if s["step"] == step_num), "pending")
             ts = self._stamp()
+
+            # 실행기가 비정상 종료했고 step이 status를 건드리지도 못한 경우 =
+            # 구현 실패가 아니라 하네스 오류(쿼터 소진·CLI 부재·타임아웃)다.
+            # error로 기록하지 않고 pending 그대로 둔다 — 원인이 해소되면
+            # 같은 명령이 이 step부터 그대로 이어진다. 재시도도 태우지 않는다.
+            if output["exitCode"] != 0 and status == "pending":
+                print(f"  ⚠ Step {step_num}: 실행기를 완료하지 못했습니다 [{elapsed}s]")
+                print(f"    exit={output['exitCode']} — step 실패가 아니라 하네스 오류입니다.")
+                print(f"    상세: phases/{self._phase_dir_name}/step{step_num}-output.json")
+                print(f"    원인 해소 후 같은 명령을 재실행하면 이 step부터 이어집니다.")
+
+                # 타임아웃은 에이전트가 파일을 고친 뒤 터진다. 커밋을 막아도
+                # 잔재는 워킹트리에 남고, 재실행 후 다음 성공 커밋의 `git add -A`가
+                # 그것을 함께 담는다 — 커밋을 막은 취지가 한 step 뒤로 밀릴 뿐이다.
+                # 자동으로 되돌리지는 않는다(작업 파괴). 무엇이 남았는지만 보여준다.
+                leftovers = self._uncommitted_paths()
+                if leftovers:
+                    print(f"\n    ⚠ 워킹트리에 커밋되지 않은 변경 {len(leftovers)}건이 남아 있습니다:")
+                    for p in leftovers[:10]:
+                        print(f"      {p}")
+                    if len(leftovers) > 10:
+                        print(f"      … 외 {len(leftovers) - 10}건")
+                    print(f"    재실행은 이 step을 처음부터 다시 돌리며, 다음 성공 커밋이 위 변경을")
+                    print(f"    함께 담습니다. 이어서 쓰려면 그대로 두고, 버리려면 먼저 정리하세요.")
+
+                sys.exit(3)
 
             if status == "completed":
                 for s in index["steps"]:
@@ -409,14 +469,14 @@ class StepExecutor:
                 branch_result = self._run_git("rev-parse", "--abbrev-ref", "HEAD")
                 if branch_result.returncode != 0:
                     print(f"\n  ERROR: 현재 브랜치를 확인하지 못했습니다.")
-                    sys.exit(1)
+                    sys.exit(3)
                 branch = branch_result.stdout.strip()
             else:
                 branch = f"feat-{self._phase_name}"
             r = self._run_git("push", "-u", "origin", branch)
             if r.returncode != 0:
                 print(f"\n  ERROR: git push 실패: {r.stderr.strip()}")
-                sys.exit(1)
+                sys.exit(3)
             print(f"  ✓ Pushed to origin/{branch}")
 
         print(f"\n{'='*60}")
@@ -435,11 +495,19 @@ def main():
     )
     args = parser.parse_args()
 
-    StepExecutor(
-        args.phase_dir,
-        auto_push=args.push,
-        use_current_branch=args.current_branch,
-    ).run()
+    # 예상 못 한 예외는 트레이스백으로 죽고 파이썬이 exit 1을 내는데, 이 저장소
+    # 계약에서 1은 'step 실패'다. 트레이스백은 그대로 보이되(삼키지 않는다)
+    # 종료코드만 하네스 오류로 옮긴다. SystemExit은 BaseException이라 통과한다.
+    try:
+        StepExecutor(
+            args.phase_dir,
+            auto_push=args.push,
+            use_current_branch=args.current_branch,
+        ).run()
+    except Exception:
+        traceback.print_exc()
+        print("\n  위 예외는 하네스 오류입니다 — step 구현 실패가 아닙니다.")
+        sys.exit(3)
 
 
 if __name__ == "__main__":

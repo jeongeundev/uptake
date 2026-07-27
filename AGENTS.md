@@ -6,7 +6,7 @@
 ## 문서 지도
 - [`docs/PRD.md`](./docs/PRD.md) — 요구사항 (무엇을·누구를 위해) + **MVP 수용 기준** (구현 전 테스트로 옮길 대상)
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — 설계 (어떻게) + VERIFY 실행 계약 · 신뢰 경계 · 패턴 직렬화 계약
-- [`docs/ADR.md`](./docs/ADR.md) — 결정 기록 (왜) · ADR-001~013
+- [`docs/ADR.md`](./docs/ADR.md) — 결정 기록 (왜) · ADR-001~019
 - [`docs/UI_GUIDE.md`](./docs/UI_GUIDE.md) — UI 가이드 (※ 잠정, 미확정)
 
 ## 기술 스택
@@ -30,6 +30,9 @@
 - 타깃 스택은 **JS/TS(vitest) 하나**. 씨앗 클러스터엔 타깃과 **다른 스택**을 최소 하나 포함(복사 아님을 증명). (ADR-013)
 
 ## 개발 프로세스
+- 작업 흐름은 **한 방향**이다: 아이디어 → `docs/`(PRD·ADR·ARCHITECTURE) 갱신 → `$harness`로 phase 설계·구현 → **독립 세션에서 리뷰 한 번**. 리뷰는 판정만 하고 끝난다.
+- 리뷰는 **두 축을 각각 다른 스킬이 맡는다.** 범용(코딩 표준·스펙 대조·코드 스멜)은 내장 `/code-review <base>`, uptake 고유 검증(성공 위장·provenance·반박 검증)은 `$review <base>`. 겹치지 않으므로 둘 다 돌린다. 자체 스킬에 범용 리뷰를 다시 구현하지 마라.
+- CRITICAL: **리뷰 결과를 `phases/`로 되먹이지 마라.** `phases/`에는 정방향 구현만 들어간다. 리뷰가 지적한 것을 고칠지는 사람이 정하고, 고친다면 그것은 새 작업이지 그 phase의 연장이 아니다. 수정 루프를 phase로 만들면 phase 이름이 갈라지고 재진입 지점이 생긴다(실제 사고 기록: `remediation/README.md`).
 - CRITICAL: 이 프로젝트는 자기가 설파하는 방법론을 **dogfooding**한다 — 새 기능은 스펙(수용 기준)을 먼저, 그 기준을 검사하는 테스트를 먼저 작성하고 통과시킨다 (TDD / Spec↔Verify).
 - over-engineering 금지: 요청하지 않은 유연성·추상화·미래 대비를 넣지 않는다. 리스크/보안은 표적 수준으로만.
 - 커밋 메시지는 conventional commits (feat:, fix:, docs:, refactor:).
@@ -48,15 +51,22 @@ npm run eval:proposer # 선택적 실제 proposer smoke (AC 아님; 키가 없�
 
 ## 하네스
 
-Step 실행기는 Codex 전용이고, 훅과 스킬은 **Codex·Claude Code 양쪽에서 동작한다.**
+Step 실행기는 Claude 전용이고, 훅과 `$harness`는 **Codex·Claude Code 양쪽에서 동작한다.** `$review`는 **Claude Code 전용**이다 — 검증 축을 독립 서브에이전트로 띄우고(`subagent_type: Explore`) 그 결과를 다시 반박 검증하는 구조라 Claude Code의 Agent 도구에 의존한다. 축 분리와 자기채점 회피(ADR-008)가 그 병렬 구조에 걸려 있어 순차 실행으로 대체할 수 없다.
 
 | 대상 | 위치 |
 |------|------|
-| Step 실행기 | `scripts/execute.py` — `python3 scripts/execute.py <phase-dir> [--push]` (codex exec 호출) |
+| Step 실행기 | `scripts/execute.py` — `python3 scripts/execute.py <phase-dir> [--push]` (`claude -p` 호출, 모델 `sonnet`) |
 | 훅 정의 | Codex `.codex/hooks.json` · Claude Code `.claude/settings.json` |
 | 훅 스크립트 | `scripts/hooks/` — 두 규격을 한 파일에서 분기 처리한다 |
 | 스킬 | `.agents/skills/<name>/SKILL.md` (정본) — Codex가 읽는 위치. 대화 중 `$`로 호출 |
 | 슬래시 커맨드 | `.claude/commands/*.md` — 위 SKILL.md로 가는 **심볼릭 링크** |
+
+저장소 스킬은 **둘뿐이다**: `$harness`(구현) · `$review`(uptake 고유 검증 축). 서로를 호출하지 않는다.
+범용 코드리뷰는 저장소가 아니라 **내장 `/code-review`**가 맡는다 — 중복 구현하지 마라.
+step 실행 세션은 실행기가 `--disable-slash-commands`로 스킬 호출 능력을 **제거**한 채 띄운다 —
+"하지 마라"를 프롬프트에 적는 것만으로는 확률적으로 샌다(실측).
+
+실행 모델은 `StepExecutor.AGENT_MODEL`에 상수로 박혀 있다. step 실행은 확정된 설계를 코드로 옮기는 구현 노동이고, 품질은 AC 검증과 3회 자가교정 루프가 잡는다.
 
 스킬 경로는 도구마다 다르다. Codex는 프로젝트 스킬을 `.agents/skills/`에서만 찾고 `.codex/skills/`는 보지 않는다. **Claude Code는 반대로 `.agents/skills/`를 읽지 않는다** — `.claude/commands/`의 심볼릭 링크를 지우면 Claude Code에서 스킬이 그대로 사라진다(실측). 링크는 편의가 아니라 필수이며, 내용은 정본 한 곳만 고친다.
 
@@ -68,6 +78,26 @@ python3 -m pytest scripts/ -q
 
 `tdd-guard.sh`는 잘못 짜여도 에러를 내지 않고 **모든 편집을 조용히 통과시킨다.** 그래서 양성(테스트 있으면 통과)뿐 아니라 음성(테스트 없으면 차단)까지 검사한다 — 통과만 확인하면 가드가 죽은 것과 구분되지 않는다.
 
-`.codex/hooks.json`은 **개별 훅이 신뢰(trust)되기 전까지 조용히 무시된다.** `~/.codex/config.toml`의 `[projects."<repo>"] trust_level = "trusted"`만으로는 부족하다 — 훅은 내용 해시 단위로 따로 승인되며, 훅을 수정하면 재승인해야 한다. 대화형 세션에서 `/hooks`로 검토·신뢰시킨다.
+`.codex/hooks.json`은 **개별 훅이 신뢰(trust)되기 전까지 조용히 무시된다.** `~/.codex/config.toml`의 `[projects."<repo>"] trust_level = "trusted"`만으로는 부족하다 — 훅은 내용 해시 단위로 따로 승인되며, 훅을 수정하면 재승인해야 한다. 대화형 세션에서 `/hooks`로 검토·신뢰시킨다. (Codex를 대화형으로 쓸 때만 해당한다. Step 실행기는 Codex를 부르지 않는다.)
 
-`scripts/execute.py`는 헤드리스로 돌아 승인 UI가 없으므로 `--dangerously-bypass-hook-trust`를 붙여 훅을 강제 활성화한다 — 이 저장소의 훅만 벡팅했다는 전제다. 이 플래그는 해당 실행에만 적용되고 신뢰를 영구 기록하지 않는다.
+`scripts/execute.py`는 헤드리스로 돌아 승인 UI가 없으므로 `--dangerously-skip-permissions`를 붙인다 — 이 저장소의 훅만 벡팅했다는 전제다. Claude Code의 훅은 이 플래그와 무관하게 걸리므로 `tdd-guard`와 `stop-verify`는 step 실행 중에도 그대로 살아 있다.
+
+`stop-verify`의 **차단은 세션당 1회**다. 두 번째 Stop부터는 게이트를 여전히 실행하지만 red여도 세션을 막지 않고(무한루프 방지) stderr에 `GATE STILL RED`를 남긴다. 즉 **게이트를 통과하지 못한 채 끝난 step이 존재할 수 있다** — 그 사실은 stderr에만 남고 `execute.py`는 그것을 보지 않으므로, step이 `completed`로 커밋됐다는 것이 lint/build/test 통과를 뜻하지는 않는다. 게이트 red를 흔적 없이 통과시키는 것(성공 위장)만 막았을 뿐이다.
+
+### CRITICAL: 실행기 오류는 step 실패가 아니다
+
+`claude`를 **띄우지 못한 것**(쿼터 소진·CLI 부재·타임아웃)과 **step 구현이 실패한 것**은 다르다. 실행기가 비정상 종료했는데 step이 `index.json`의 status를 건드리지도 못했다면 하네스 오류이며, `execute.py`는 이때:
+
+- status를 `pending`으로 **남긴다** (`error`로 기록하지 않는다)
+- 재시도를 태우지 않는다 (쿼터가 없는 상태에서 3회 헛도는 낭비를 막는다)
+- 커밋하지 않는다 (반쪽 작업이 `feat(...)`로 들어가는 것을 막는다)
+- 워킹트리에 남은 미커밋 변경이 있으면 목록을 출력한다
+- `phases/index.json`을 건드리지 않고 **exit code 3**으로 멈춘다
+
+원인이 해소되면 같은 명령을 그대로 재실행하면 된다 — 중단된 step부터 이어진다. 이것은 게이트의 `gate-error`와 같은 원칙이다(ADR-008): 인프라 오류를 결과로 계산하지 않는다. **exit 1(step 실패)과 exit 3(하네스 오류)을 뭉치지 마라.**
+
+**"커밋하지 않는다"는 잔재를 없앤다는 뜻이 아니다.** 타임아웃은 에이전트가 파일을 고친 **뒤** 터지므로 워킹트리에 반쪽 편집이 남는다. 재실행은 그 위에서 step을 처음부터 다시 돌리고, 다음 성공 커밋의 `git add -A`가 잔재를 함께 담는다 — 커밋을 막은 효과는 한 step 뒤로 밀릴 뿐이다. 실행기는 자동으로 되돌리지 않는다(작업 파괴). 목록을 보고 **사람이** 이어 쓸지 버릴지 정한다. 이 문제가 없는 것은 작업 전 실패(쿼터 소진·CLI 부재)뿐이다.
+
+exit code: `1` = step 실패, `2` = blocked(사용자 개입 필요), `3` = 하네스 오류.
+
+**exit 1은 좁다.** "step 구현이 3회 시도 후에도 실패했다"와 "이전 실행이 남긴 `error` step이 막고 있다" 둘뿐이다. 나머지는 전부 3이다 — phase 디렉터리·`index.json`·`step{N}.md` 부재, git 부재·checkout 실패, push 실패, 예상 못 한 예외. 판정 기준은 "step의 구현이 틀렸는가"이지 "무언가 실패했는가"가 아니다. 예상 못 한 예외는 트레이스백을 그대로 출력한 뒤 3으로 나간다 — 종료코드만 옮기고 삼키지 않는다.
