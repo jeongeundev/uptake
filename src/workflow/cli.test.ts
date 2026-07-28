@@ -57,4 +57,25 @@ describe("runCli", () => {
     expect(outcome.exitCode).toBe(2);
     expect(outcome.stderr.join("\n")).toContain("uptake survey <repository>");
   });
+
+  it("exits 2 with a usage message when author is missing --candidate", async () => {
+    const outcome = await runCli(["author"], root);
+
+    expect(outcome.exitCode).toBe(2);
+    expect(outcome.stderr.join("\n")).toContain("uptake author --candidate <id>");
+  });
+
+  it("exits 2 with a usage message when author's --candidate has no value", async () => {
+    const outcome = await runCli(["author", "--candidate"], root);
+
+    expect(outcome.exitCode).toBe(2);
+    expect(outcome.stderr.join("\n")).toContain("uptake author --candidate <id>");
+  });
+
+  it("exits 2 when author is run without a prior survey", async () => {
+    const outcome = await runCli(["author", "--candidate", "some-id"], root);
+
+    expect(outcome.exitCode).toBe(2);
+    expect(outcome.stderr.join("\n")).toContain("uptake survey");
+  });
 });

@@ -1,3 +1,4 @@
+import { runAuthorCommand } from "@/workflow/steps/author";
 import { runInit } from "@/workflow/steps/init";
 import { runSurveyCommand } from "@/workflow/steps/survey";
 
@@ -7,7 +8,7 @@ export type CliOutcome = {
   stderr: string[];
 };
 
-const KNOWN_COMMANDS = ["init", "survey"] as const;
+const KNOWN_COMMANDS = ["init", "survey", "author"] as const;
 type KnownCommand = (typeof KNOWN_COMMANDS)[number];
 
 function isKnownCommand(value: string | undefined): value is KnownCommand {
@@ -23,6 +24,15 @@ function usageLines(): string[] {
     "Available commands:",
     ...KNOWN_COMMANDS.map((command) => `  ${command}`),
   ];
+}
+
+function parseCandidateFlag(args: string[]): string | undefined {
+  const index = args.indexOf("--candidate");
+  if (index === -1) {
+    return undefined;
+  }
+  const value = args[index + 1];
+  return value === undefined || value === "" ? undefined : value;
 }
 
 async function runKnownCommand(
@@ -45,15 +55,31 @@ async function runKnownCommand(
     };
   }
 
-  const [repository] = args;
-  if (repository === undefined) {
+  if (command === "survey") {
+    const [repository] = args;
+    if (repository === undefined) {
+      return {
+        exitCode: 2,
+        stdout: [],
+        stderr: ["Usage: uptake survey <repository>"],
+      };
+    }
+    const result = await runSurveyCommand(repository, root);
+    const lines = result.message.split("\n");
+    return result.exitCode === 0
+      ? { exitCode: 0, stdout: lines, stderr: [] }
+      : { exitCode: result.exitCode, stdout: [], stderr: lines };
+  }
+
+  const candidateId = parseCandidateFlag(args);
+  if (candidateId === undefined) {
     return {
       exitCode: 2,
       stdout: [],
-      stderr: ["Usage: uptake survey <repository>"],
+      stderr: ["Usage: uptake author --candidate <id>"],
     };
   }
-  const result = await runSurveyCommand(repository, root);
+  const result = await runAuthorCommand(candidateId, root);
   const lines = result.message.split("\n");
   return result.exitCode === 0
     ? { exitCode: 0, stdout: lines, stderr: [] }

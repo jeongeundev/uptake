@@ -53,7 +53,10 @@
     {
       "step": 6,
       "name": "cli-author",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-29T00:42:55+0900",
+      "summary": "src/workflow/steps/author.ts(runAuthorCommand: current run의 survey.json에서 candidate·revision을 그대로 읽어 adoptSurveyCandidate를 호출, HEAD 재조회 없음; 성공/실패 무관 authoring.json 기록; drafted→0/채택 실패 전부→1/미실행·실패·candidate 없음→2)를 추가하고 cli.ts에 author --candidate <id> 명령을 연결했다. author는 카탈로그를 등재하지 않으며 validatePatternValue는 소비 시점(phase 5) 몫으로 남겨 직렬화 왕복만 테스트로 확인했다.",
+      "completed_at": "2026-07-29T00:59:40+0900"
     },
     {
       "step": 7,
