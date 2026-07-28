@@ -134,6 +134,8 @@ survey-rules.json       # SURVEY 수집 규칙 (repo에 동봉된 데이터 — 
 
 **CLI 호출 규약.** phase 4의 진입점은 `bin/uptake.ts`이고 `npx tsx bin/uptake.ts <command>`로 호출한다. 배포·번들링(`npm link`·`bin` 필드·바이너리)은 phase 4 비범위이므로, 통합 테스트도 이 형태로 **별개 프로세스를 띄운다**. 진입 파일 확장자를 `.ts`로 두는 것은 취향이 아니다 — tsconfig의 `include`가 `**/*.ts`뿐이라 `.mts`는 `npm run build`의 타입체크에 포함되지 않고, 그러면 CLI 전체가 게이트 밖에서 green으로 통과한다.
 
+**cwd가 저장소 밖이면 `--tsconfig`가 필요하다.** `tsx`는 `@/*` 경로 별칭을 진입 파일의 위치가 아니라 **`cwd`에서부터 올라가며 찾은 `tsconfig.json`** 기준으로 해석한다(내부적으로 `TSX_TSCONFIG_PATH` 환경변수가 없으면 `process.cwd()`를 기본값으로 쓴다). 사용자의 프로젝트 디렉터리에서 실행하면 그 탐색이 uptake의 `tsconfig.json`을 찾지 못해 `@/...` import가 전부 `MODULE_NOT_FOUND`로 깨진다 — `.uptake/`를 프로젝트 루트에 쓰는 계약(위 '경로가 분리된다')과는 별개로, **모듈 해석 자체가 cwd에 매여 있다.** 그래서 실제 호출은 `npx tsx --tsconfig <uptake-repo>/tsconfig.json bin/uptake.ts <command>`이고, 통합 테스트도 이 플래그로 uptake 저장소 밖 cwd에서 실행됨을 검증한다(`--tsconfig`는 `tsx`가 제공하는 표준 플래그이며 uptake가 만든 것이 아니다).
+
 ### 층 1 재검증 (ADR-025)
 웹에서 이식 대상 패턴은 **언제나 `loadCatalog`를 통과해서** 들어온다(`workflow-store.ts`) — `instantiate`·`verify`는 provenance를 재검증하지 않으므로, 층 1 하드 게이트의 보증은 전적으로 카탈로그 로드가 지고 있다. CLI는 카탈로그를 거치지 않으므로 그 보증이 다른 곳에서 와야 한다.
 

@@ -61,7 +61,10 @@
     {
       "step": 7,
       "name": "relay-integration",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-29T06:24:59+0900",
+      "summary": "src/__tests__/workflow-relay.integration.test.ts를 추가해 init→survey→author를 uptake 저장소 밖 cwd에서 별개 tsx 프로세스로 관통시켰다(순번 채번·current 갱신·고정 revision 재사용(ADR-021)·validatePatternValue 통과·미배포 명령 exit 2·카탈로그 불변까지 확인). 그 과정에서 tsx가 `@/` 별칭을 cwd 기준으로 찾아 저장소 밖에서 MODULE_NOT_FOUND가 나는 것을 발견해 `--tsconfig` 플래그를 호출 규약에 추가하고 ARCHITECTURE.md 'CLI 호출 규약'에 반영했다. npm run test:e2e로 공유 엔진 변경(revision-moved 제거·no-signal 필드·survey-rules 모듈 import)의 웹 회귀 없음도 확인했다.",
+      "completed_at": "2026-07-29T06:35:45+0900"
     }
   ],
   "created_at": "2026-07-28T20:38:45+0900"
