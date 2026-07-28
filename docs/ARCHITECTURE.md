@@ -10,7 +10,9 @@
 ## 디렉토리 구조
 > 아래는 스캐폴딩의 목표 구조다. 착수 후 확정.
 ```
-bin/uptake.mts          # CLI 진입 — 명령 디스패치·종료 코드 (phase 4)
+bin/uptake.ts           # CLI 진입 — 명령 디스패치·종료 코드 (phase 4)
+                        #   확장자는 `.ts`다 — tsconfig의 include가 `**/*.ts`뿐이라
+                        #   `.mts`는 `npm run build`의 타입체크 밖으로 빠진다
 src/
 ├── workflow/           # 워크플로우 층 (phase 4) — 아래 '워크플로우 산출물 계약' 참조
 │   ├── paths.ts        # run 디렉터리 해석 · current 포인터
@@ -27,23 +29,21 @@ src/
 │   └── provenance/     # 소스 경로 resolve·검증 (환각 차단)
 ├── services/           # Anthropic SDK 래퍼, 로컬 툴체인 실행 래퍼(vitest)
 └── types/              # 패턴 스키마 등 타입 정의
-templates/              # init이 복사하는 원본 (METHOD.md · 에이전트 커맨드)
+templates/              # init이 복사하는 원본 (METHOD.md)
 catalog/                # 손 큐레이션 씨앗 패턴 파일들 (repo에 동봉 = 커먼즈의 실재 형태)
 survey-rules.json       # SURVEY 수집 규칙 (repo에 동봉된 데이터 — 코드가 아니다 · ADR-018)
 ```
+`templates/`·`catalog/`·`survey-rules.json`·자기검증 fixture는 **패키지 동봉 자산**이며 설치 위치 기준으로 해석한다. 사용자 저장소로 복사하지 않는다(ADR-024 · 아래 '자산 경로 계약').
 
 **사용자 저장소에 놓이는 것** (phase 4부터):
 ```
 .uptake/
 ├── METHOD.md           # 원칙 + 단계 체인. 설명이며 집행 주체가 아니다 (편집해도 게이트 불변)
-├── config.json         # sourceRoot · catalogDir · proposerModel
 ├── runs/
-│   ├── current         # 현재 run 디렉터리명 한 줄
+│   ├── current         # 현재 run 디렉터리명 한 줄 — 사람이 고쳐 쓰는 인터페이스
 │   └── 001-<repo-slug>/
-│       ├── run.json            # 단계 원장 (attemptedAt · status · exitCode)
 │       ├── survey.json         # 성공/실패 무관 항상 기록
-│       ├── authoring.json      # 성공/실패 무관 항상 기록
-│       ├── pattern.draft.json  # 성공 시에만
+│       ├── authoring.json      # 성공/실패 무관 항상 기록 (성공 시 pattern 포함)
 │       ├── bindings.json       # phase 5
 │       ├── generated.json      # phase 5 — 검증된 정확한 생성물
 │       ├── verify.json         # phase 5
@@ -51,6 +51,7 @@ survey-rules.json       # SURVEY 수집 규칙 (repo에 동봉된 데이터 — 
 │       └── logs/{positive,negative}.log
 └── sources/            # 씨앗·근거 저장소 (기존 그대로 · gitignore)
 ```
+**단계당 상태 파일은 하나다.** 한 단계의 상태를 두 파일이 주장하면 어긋날 수 있는 두 번째 기록이 생긴다 — 릴레이를 파일로 내린 이유가 상태가 여러 곳에 사는 것을 없애려는 것이었다. 단계가 파일을 여럿 쓰는 것(`verify`의 `generated.json`·`logs/`)은 무방하되, **`status`를 싣는 파일은 단계당 하나**이고 판정은 그것만 본다. 설정 파일과 실행 원장은 두지 않는다 — 설정은 `인자 > 환경변수 > 기본값`으로 해결되고, "무엇을 언제 시도했는가"는 각 단계 상태 파일에 이미 있다.
 `runs/`를 커밋하면 방법론 도입 과정이 리뷰 가능한 diff가 된다 — 커밋 여부는 사용자가 정하고 `init`은 `.gitignore` 제안만 한다(`logs/`는 제외 권장).
 
 ## 패턴
@@ -95,13 +96,21 @@ survey-rules.json       # SURVEY 수집 규칙 (repo에 동봉된 데이터 — 
 
 | 명령 | 읽기 | 성공 산출물 | 항상 쓰는 것 |
 |---|---|---|---|
-| `init` | — | `METHOD.md` · `config.json` · `survey-rules.json` | — |
-| `survey <repository>` | `config.json` · `survey-rules.json` · 소스@HEAD | `survey.json` (status=`surveyed`) | `survey.json` · `run.json` |
-| `author --candidate <id> --source <repo2>` | `survey.json` | `pattern.draft.json` · `catalog/<id>.json` | `authoring.json` · `run.json` |
-| `verify --target <abs>` | `pattern.draft.json` · 타깃 | `generated.json` · `verify.json` (status=`verified`) | `bindings.json` · `verify.json` · `logs/` · `run.json` |
-| `apply` | `generated.json` · `bindings.json` · `verify.json` | 타깃 파일 · `apply.json` | `run.json` |
+| `init` | — | `METHOD.md` | — |
+| `survey <repository>` | 동봉 수집 규칙 · 소스@HEAD | `survey.json` (status=`surveyed`) | `survey.json` |
+| `author --candidate <id>` | `survey.json` | `authoring.json` (status=`drafted` · `pattern` 포함) | `authoring.json` |
+| `verify --target <abs>` | `authoring.json`의 `pattern` · 타깃 | `generated.json` · `verify.json` (status=`verified`) | `bindings.json` · `verify.json` · `logs/` |
+| `apply` | `generated.json` · `bindings.json` · `verify.json` | 타깃 파일 · `apply.json` | `apply.json` |
+
+`author`에는 **두 번째 소스 옵션이 없다** — CLI는 SURVEY 채택 경로만 태우고 채택 산출물은 항상 `descriptive`/`observed`다. 대조 저작과 `generative` 승격은 후속 phase다(ADR-023).
+
+**`author`는 카탈로그에 등재하지 않는다.** 위 표를 보면 등재된 카탈로그를 **되읽는 행이 없다** — `verify`는 앞 단계 산출물을 읽는다. 아무도 소비하지 않는 산출물은 릴레이의 일부가 아니므로, 등재는 카탈로그를 실제로 읽는 단계와 함께 설계한다. 그 대신 **소비 시점에 층 1 하드 게이트를 건다**(ADR-025 · 아래 '층 1 재검증').
 
 각 명령은 인자 없이 `runs/current`가 가리키는 run에서 앞 단계 산출물을 찾는다. **프로세스 경계를 넘어 재개된다** — 중단 후 같은 명령을 다시 치면 이어진다.
+
+**run은 `survey`가 만든다.** `survey <repository>`는 인자를 받는 유일한 조사 명령이고, 실행할 때마다 **새 run 디렉터리를 만들고 `current`를 갱신한다** — 같은 저장소를 다시 조사해도 앞 run을 덮어쓰지 않는다. 조사는 revision을 새로 고정하는 행위이므로 재개가 아니라 새 작업이다. 위의 "재개된다"는 `author` 이후 단계의 성질이며, 그 단계들은 `current`가 가리키는 run만 읽는다.
+
+**여러 run 중 다른 것을 고르려면 `current`를 고쳐 쓴다.** `runs/current`는 디렉터리명 한 줄짜리 파일이고, **사람이 고치라고 만든 인터페이스**다 — 조사를 여러 번 해보고 그중 하나를 채택하는 것은 SURVEY 사용자의 정상 행동이며(ADR-017: 사용자는 제시된 것 중 고른다), 그 선택을 명령 옵션으로 만들면 "각 명령은 인자 없이 앞 단계를 찾는다"는 릴레이 계약에 예외가 생긴다. phase 5의 "**산출물 직접 편집은 공식 경로가 아니다**"는 **승인·검증 산출물에 한정**된다 — 그쪽은 무엇에 동의했는지를 고정한 기록이라 편집이 곧 우회지만, `current`는 어느 run을 볼지 가리키는 포인터일 뿐이고 가리켜진 run은 자기 게이트를 그대로 통과해야 한다.
 
 **3-상태 모델.** 산출물 타입은 이미 판별 유니온이고 실패 진단을 싣고 있으므로, **엔진이 반환한 것을 그대로 직렬화한다.** 새 상태 타입을 만들지 않는다.
 
@@ -113,13 +122,54 @@ survey-rules.json       # SURVEY 수집 규칙 (repo에 동봉된 데이터 — 
 
 **게이트 실패도 산출물을 남긴다.** 다음 단계가 소비할 성공 산출물만 만들지 않으며, 실패 코드·폐기 근거·고정 revision은 기록한다 — "실행하지 않은 상태"와 "실행했지만 실패한 상태"를 디스크에서 구분할 수 있어야 한다. `no-candidate`가 이미 `repository`·`revision`·`collected`·`skipped`·`discardedEvidence`·`discardedCandidates`를 반환하므로 그대로 쓴다. **로그 파일은 항상 남긴다** — `gate-error`·`timeout`의 원인은 리포터 출력에만 있고, 그것이 사라지면 인프라 오류와 진짜 red를 구별할 수 없다.
 
-**종료 코드.** `0` 성공 · `1` 게이트 실패(작업이 틀렸다) · `2` 선행조건 미충족(순서가 틀렸다) · `3` 인프라 오류. 하네스 실행기(`scripts/execute.py`)의 분류 원칙과 같다 — 인프라 오류를 결과로 계산하지 않는다.
+**revision이 고정된 뒤의 실패는 예외 없이 revision을 싣는다.** 지금 `no-signal`은 revision을 이미 알면서도 `detail`만 반환한다 — 그 상태로 직렬화하면 "무엇을 조사했는지 모르는 실패 기록"이 남아 재현이 끊긴다. 반환 형태를 넓혀 revision(그리고 이미 확정된 `collected`·`skipped`)을 함께 싣는다. **새 상태를 만드는 것이 아니라 기존 실패 분기에 필드를 더하는 것**이며, 위의 "엔진이 반환한 것을 그대로 직렬화한다"는 원칙은 유지된다. revision을 고정하기 **전**에 끝난 실패(`repository-unresolved`·`revision-unpinnable`)에는 실을 revision이 없고, 그것이 곧 진단이다.
 
-**exit 2가 워크플로우를 가르친다.** 선행 산출물이 없거나 실패 상태면 실행하지 않고 다음에 칠 명령을 알려준다. 워크플로우를 문서가 아니라 명령이 가르치는 지점이다.
+**성공 판별자는 한 파일에만 있다.** 단계마다 `status`를 싣는 상태 파일이 하나뿐이므로(`survey.json`·`authoring.json`·`verify.json`) 판정은 그 파일의 `status` 하나로 끝난다. 성공 시에만 생기는 **별도의 파일**을 성공 판별자로 삼지 않는다 — 그러면 "`status`는 성공인데 그 파일이 없다"는 상태(쓰기 중단·부분 실패)가 가능해지고, 선행조건 검사가 무엇을 믿을지 정할 수 없게 된다. 크지 않은 산출은 상태 파일 안의 필드로 담고(`authoring.json`의 `pattern`), 따로 두는 것은 부피가 큰 내용뿐이다(`generated.json`·`logs/`) — 그것들은 판별자가 아니라 상태 파일이 성공일 때 함께 있어야 하는 내용이다.
 
-**`METHOD.md`의 지위.** 원칙(provenance·서술적 태도·양성/음성·불신 격리·2층 게이트·직교 2축·자생/상속 한계)과 단계 체인을 담는다. **설명 문서이며 집행 주체가 아니다** — 편집해도 게이트는 바뀌지 않고 게이트의 정본은 코드다. 파일 첫 줄에 그 사실을 못박는다. 각 원칙에는 집행 게이트의 **상태 이름**만 붙인다(`negative-not-caught`·`provenance-unresolved` 등). `file:line`은 쓰지 않는다 — 라인 드리프트로 죽은 참조가 된다. Spec Kit의 `constitution.md`와 이름을 달리한 이유가 이것이다: 거기서는 사용자가 작성·개정하는 문서지만, uptake의 원칙은 제품이 집행하는 불변식이다.
+**종료 코드.** `0` 성공 · `1` 게이트 실패(작업이 틀렸다) · `2` 실행 전제 미충족 · `3` 인프라 오류. 하네스 실행기(`scripts/execute.py`)의 분류 원칙과 같다 — 인프라 오류를 결과로 계산하지 않는다.
+
+**exit 2가 워크플로우를 가르친다.** `2`의 실체는 "**지금 이 명령을 실행할 수 없고, 대신 무엇을 해야 하는지 알려준다**"이다. 선행 산출물이 없거나 실패 상태인 것(순서 위반)이 그 대표형이고, **아직 배포되지 않은 명령을 친 것**도 같은 부류다. 어느 쪽이든 실행하지 않고 다음에 칠 것을 출력한다. 워크플로우를 문서가 아니라 명령이 가르치는 지점이다.
+
+**미구현 단계의 표현.** `METHOD.md`는 **다섯 단계를 다 적되 현재 배포된 명령을 밝힌다** — 방법론 문서이지 구현 현황 문서가 아니므로 체인을 잘라내지 않는다. 반대로 **CLI는 아직 없는 명령의 이름을 알지 않는다**: 아는 명령 외에는 전부 unknown으로 처리해 사용 가능한 명령 목록을 출력하고 `exit 2`로 나간다. 미래 명령의 이름과 인자를 코드에 박아두면 시그니처가 바뀔 때 죽은 문자열이 남고, 구현되지 않은 단계를 코드가 미리 아는 형태가 된다. 마지막 배포 단계의 성공 메시지는 다음 명령 대신 **"여기까지가 현재 배포된 워크플로우"**를 말한다.
+
+**CLI 호출 규약.** phase 4의 진입점은 `bin/uptake.ts`이고 `npx tsx bin/uptake.ts <command>`로 호출한다. 배포·번들링(`npm link`·`bin` 필드·바이너리)은 phase 4 비범위이므로, 통합 테스트도 이 형태로 **별개 프로세스를 띄운다**. 진입 파일 확장자를 `.ts`로 두는 것은 취향이 아니다 — tsconfig의 `include`가 `**/*.ts`뿐이라 `.mts`는 `npm run build`의 타입체크에 포함되지 않고, 그러면 CLI 전체가 게이트 밖에서 green으로 통과한다.
+
+### 층 1 재검증 (ADR-025)
+웹에서 이식 대상 패턴은 **언제나 `loadCatalog`를 통과해서** 들어온다(`workflow-store.ts`) — `instantiate`·`verify`는 provenance를 재검증하지 않으므로, 층 1 하드 게이트의 보증은 전적으로 카탈로그 로드가 지고 있다. CLI는 카탈로그를 거치지 않으므로 그 보증이 다른 곳에서 와야 한다.
+
+**산출물에서 패턴을 읽는 단계가 소비 직전에 `validatePatternValue`를 건다.** 웹의 `loadCatalog`가 부르는 바로 그 함수이며, 통과하지 못하면 그 단계가 실패한다. 산출물을 **쓰는** 단계의 의무는 하나뿐이다 — 그 함수가 그대로 먹는 형태로 직렬화할 것.
+
+- **편집을 탐지하지 않는다.** 해시·fingerprint로 산출물 변조를 잡는 방식은 (1) 원래 내용이 잘못이었던 경우를 못 잡고, (2) 산출물을 사람이 읽고 고칠 수 있다는 ADR-020의 전제와 싸운다. 묻는 것을 "누가 고쳤는가"에서 "**지금 이 내용이 게이트를 통과하는가**"로 옮기면 둘 다 성립한다.
+- **웹의 draft fingerprint 결속과 역할이 다르다.** 웹의 `requestFingerprint`(`draft-store`)는 HTTP 세션이 사람의 의사를 대신 주장하는 구간에서 입력↔초안 불일치를 막는 장치다. CLI에는 그 구간이 없다.
+- 검증·적용 산출물의 해시 3중 대조(아래 phase 5)는 이것과 별개다 — 그쪽은 "무엇에 동의했는지"를 고정하는 장치이고, 이쪽은 "근거가 실재하는지"를 확인하는 장치다.
+
+### 자산 경로 계약 (ADR-024)
+경로는 **두 종류뿐이며 기준이 다르다.** 하나로 뭉치면 명령이 uptake 저장소 밖에서 도는 순간 깨진다.
+
+| 종류 | 대상 | 해석 기준 |
+|---|---|---|
+| 패키지 동봉 자산 | `survey-rules.json` · 씨앗 `catalog/` · `templates/` · 자기검증 fixture | **설치 위치** |
+| 사용자 상태 | `.uptake/`(`METHOD.md`·`runs/`·`sources/`) | **프로젝트 루트** (실행 시 작업 디렉터리) |
+
+**적용은 그 자산을 실제로 읽는 코드 경로가 생길 때 한다.** 읽지 않는 자산의 경로를 미리 고치면 그것이 옳은지 검증할 실행이 없다. phase 4의 대상은 둘이다.
+
+| 자산 | phase 4가 읽는가 | 해법 |
+|---|---|---|
+| `survey-rules.json` | `survey` | **모듈 import** — 경로 해석 자체를 없앤다 |
+| `templates/METHOD.md` | `init` | 설치 위치 해석 (`init` 전용) |
+| 씨앗 `catalog/` | 아니오 (CLI는 카탈로그를 읽지 않는다) | 유예 |
+| 자기검증 fixture | 아니오 (`generative` 전용 · ADR-023) | 유예 |
+
+- **`survey-rules.json`은 모듈로 import한다.** 이 파일은 CLI와 웹이 **둘 다** 읽는데, 웹은 Next가 서버 코드를 번들하므로 `import.meta.url` 기준 해석이 출력 청크 위치를 가리킬 위험이 있다(이 저장소엔 `next.config.*`가 없어 파일 추적 보정 수단도 없다). 모듈 import는 두 표면에서 동일하게 동작하고 경로가 개입하지 않는다. 파일은 저장소에 그대로 남고 `UPTAKE_SURVEY_RULES` 오버라이드는 fs 읽기로 유지되므로 ADR-018의 "확장 가능한 데이터"는 보존된다.
+- **`init`의 `templates/` 복사는 명시적 예외다.** 복사를 금지하는 이유는 사본과 원본이 갈라져 **게이트 동작이 사본마다 달라지는 것**을 막기 위해서인데, `METHOD.md`는 편집해도 게이트가 바뀌지 않는 설명 문서다(아래 'METHOD.md의 지위'). 갈라져도 무해하므로 복사한다. 갈라지면 안 되는 것은 판정에 쓰이는 자산(수집 규칙·씨앗 패턴·fixture)이다.
+- **설정 우선순위는 `명시 인자 > 환경변수 > 기본값`이다.** 설정 파일은 두지 않는다 — 지금 기본값 아닌 값이 필요한 시나리오가 없고, 아무것도 결정하지 않는 설정 통로는 어긋날 수 있는 두 번째 경로만 만든다. 기존 `UPTAKE_SOURCE_ROOT`·`UPTAKE_SURVEY_RULES` 등은 중간 단으로 남으며 폐기하지 않는다.
+- **씨앗 소스(`.uptake/sources/`)는 이 계약이 해결하지 않는다.** `init`은 네트워크에 나가지 않으므로 근거 저장소를 받아오지 못하고, 없으면 그 패턴은 `provenance-unresolved`로 거부된다 — 정상 동작이다. `METHOD.md`가 무엇을 왜 받아야 하는지 설명한다.
+
+**`METHOD.md`의 지위.** 원칙(provenance·서술적 태도·양성/음성·불신 격리·2층 게이트·직교 2축·자생/상속 한계)과 **다섯 단계 체인**을 담고, 그중 현재 배포된 명령을 밝힌다. **설명 문서이며 집행 주체가 아니다** — 편집해도 게이트는 바뀌지 않고 게이트의 정본은 코드다. 파일 첫 줄에 그 사실을 못박는다. 각 원칙에는 집행 게이트의 **상태 이름**만 붙인다(`negative-not-caught`·`provenance-unresolved` 등). `file:line`은 쓰지 않는다 — 라인 드리프트로 죽은 참조가 된다. Spec Kit의 `constitution.md`와 이름을 달리한 이유가 이것이다: 거기서는 사용자가 작성·개정하는 문서지만, uptake의 원칙은 제품이 집행하는 불변식이다.
 
 **revision 고정.** `survey`가 개시 시점 HEAD SHA를 한 번 고정하면 이후 단계는 HEAD를 다시 읽지 않는다. 실패는 근거를 실제로 읽을 수 없을 때만 일어난다 — 커밋 객체 해석 불가는 `revision-unresolvable`, 경로 읽기 불가는 `provenance-unresolvable`. HEAD 이동은 실패 사유가 아니다(ADR-021).
+
+**phase 4에는 승인 경계가 없다.** `author`는 카탈로그에 등재하지 않고 run 디렉터리 안에 산출물만 쓰므로, 사용자 저장소의 다른 곳이나 타깃 저장소를 바꾸지 않는다 — 동의를 받을 대상이 없다. 웹 표면의 draft → approve → register 3단계는 **HTTP 세션이 사람의 의사를 대신 주장하기 때문에** 필요한 구조이고, CLI에는 그 간극이 없다. 승인이 필요해지는 지점은 타깃 저장소를 바꾸는 `apply`이며 그것은 TTY 대화형이다(아래 phase 5 · ADR-022). **등재를 CLI에 붙일 때 웹의 인메모리 draft 저장소에 승인을 심지 마라** — 등재 엔진(`registerPattern`)은 이미 인자만 받는 순수 함수다.
 
 **verify → apply 결속 (phase 5).** `verify`가 instantiate한 **정확한 파일들**을 `generated.json`에 고정하고, `apply`는 **다시 생성하지 않고** 그 파일을 읽어 적용한다. 세 해시를 검증 시점에 고정하고 적용 직전 재계산해 대조한다.
 
@@ -205,7 +255,7 @@ type SurveyCandidate = {
 
 **role은 하나다.** 주입되는 evidence 전부가 후보 하나에 대응하는 **단일 role**로 묶인다. 저장소가 하나뿐이면 무엇이 스택-불변 본질이고 무엇이 결합점인지 **가를 근거가 없다**(ADR-005: 공통=본질 / 차이=결합점). role을 쪼개는 것은 대조가 하는 일이며, 이 패턴이 두 번째 저장소와 대조돼 `corroborated`로 승급할 때 비로소 갈라진다. 따라서 SURVEY 등재물의 `bindingPoints`는 비어 있고, **비어 있는 것이 정직하다.**
 
-**revision 이동은 거부한다.** SURVEY가 고정한 revision과 채택 시점에 EXTRACT가 고정하는 revision이 다르면 등재를 거부하고 재조사를 요구한다. 사용자가 본 근거와 등재되는 근거가 서로 다른 커밋의 것이 되는 경로는 없다.
+**revision 이동은 실패가 아니다 (ADR-021로 교체됨).** 이전 계약은 "채택 시점에 EXTRACT가 고정한 revision이 SURVEY의 것과 다르면 등재를 거부한다"였다. 그 판정(`revision-moved`)은 **폐기한다** — 채택 경로는 HEAD를 다시 읽지 않고 SURVEY가 고정한 revision에서만 읽으므로, 애초에 두 값을 비교할 일이 없다. 사용자가 본 근거와 등재되는 근거가 다른 커밋의 것이 되는 경로가 없다는 요구는 그대로이며, **비교가 아니라 재조회 금지로** 달성된다. 실패는 근거를 실제로 읽을 수 없을 때만 일어난다(`revision-unresolvable`·`provenance-unresolvable`). 위 '고정 revision은 후속 단계까지 이어진다'와 같은 규칙이다.
 
 **승인·등재는 기존 계약 그대로.** 초안은 승인 전까지 카탈로그에 쓰지 않고, 입력 fingerprint에 결속된 draft로 남으며, 승인 이벤트가 한 번 소비돼 `catalog/<patternId>.json`에 원자적으로 기록된다. 기존 파일을 덮어쓰지 않고 patternId 충돌은 등재 거부다(씨앗 보호). 기록 전·후로 층 1 하드 게이트를 통과한다.
 
