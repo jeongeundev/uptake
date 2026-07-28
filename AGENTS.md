@@ -58,6 +58,7 @@ Step 실행기는 Claude 전용이고, 훅과 `$harness`는 **Codex·Claude Code
 | Step 실행기 | `scripts/execute.py` — `python3 scripts/execute.py <phase-dir> [--push]` (`claude -p` 호출, 모델 `sonnet`) |
 | 훅 정의 | Codex `.codex/hooks.json` · Claude Code `.claude/settings.json` |
 | 훅 스크립트 | `scripts/hooks/` — 두 규격을 한 파일에서 분기 처리한다 |
+| 최종 검증 | `scripts/final-verify.sh` — phase 게이트(E2E). 실행기와 CI가 공유한다 |
 | 스킬 | `.agents/skills/<name>/SKILL.md` (정본) — Codex가 읽는 위치. 대화 중 `$`로 호출 |
 | 슬래시 커맨드 | `.claude/commands/*.md` — 위 SKILL.md로 가는 **심볼릭 링크** |
 
@@ -82,6 +83,27 @@ python3 -m pytest scripts/ -q
 
 `scripts/execute.py`는 헤드리스로 돌아 승인 UI가 없으므로 `--dangerously-skip-permissions`를 붙인다 — 이 저장소의 훅만 벡팅했다는 전제다. Claude Code의 훅은 이 플래그와 무관하게 걸리므로 `tdd-guard`와 `stop-verify`는 step 실행 중에도 그대로 살아 있다.
 
+### 검증은 두 층이다 — step 게이트와 phase 게이트
+
+| 층 | 언제 | 무엇 | 정의 |
+|---|---|---|---|
+| step 게이트 | Claude 세션이 끝날 때마다(= step마다) | `npm run lint && build && test` | `scripts/hooks/stop-verify.sh` |
+| phase 게이트 | 그 phase의 **모든 step이 통과한 뒤 1회** | `npm run test:e2e` | `scripts/final-verify.sh` |
+
+E2E는 프로덕션 빌드 두 번과 브라우저를 띄운다(실측 ~46s). step마다 돌리면 phase 하나가 몇 시간이 되고, 회귀는 phase 경계에서 잡으면 충분하다. **`stop-verify.sh`에 E2E를 추가하지 마라** — 그 훅은 매 Stop마다 걸린다. 반대로 phase 게이트에서 lint/build/test를 다시 돌리지도 않는다(같은 게이트를 두 번 돌리는 것이다). 두 방향 모두 `scripts/test_final_verify.py`가 검사한다.
+
+`scripts/execute.py`가 `_execute_all_steps` 다음, `_finalize` 앞에서 정확히 한 번 부른다. red면:
+
+- phase를 **완료로 기록하지 않는다** — `index.json`에 `completed_at`이 없고 `phases/index.json`은 `error`다
+- 판정은 `index.json`의 `final_verify`(커밋됨), raw 출력은 `final-verify-output.json`(`step*-output.json`과 같이 로컬 전용)에 남긴다
+- exit 1
+
+고친 뒤 같은 명령을 재실행하면 step은 전부 `completed`이므로 에이전트를 다시 부르지 않고 게이트부터 돈다. 게이트를 **띄우지 못한 것**(스크립트 부재·타임아웃)은 red가 아니라 하네스 오류이며 exit 3으로 나가고 `phases/index.json`을 건드리지 않는다 — ADR-008의 `gate-error`와 같은 원칙이다.
+
+CI도 같은 스크립트를 부른다(`bash scripts/final-verify.sh`). **최종 검증의 정의는 그 파일 하나이며**, 명령을 늘릴 일이 생기면 호출자가 아니라 거기에만 추가한다.
+
+**게이트를 건너뛰는 스위치는 없다.** 통과하지 못한 채 phase를 마감해야 한다면 사람이 `index.json`을 직접 고친다 — 흔적이 남는 경로만 남겨 둔 것이 의도다. 게이트 자체를 되돌리려면 `scripts/final-verify.sh`를 지우고 `execute.py`의 `run()`에서 `self._final_verify()` 한 줄을 뺀다(그 상태를 `scripts/test_execute.py`의 `TestRunWiring`·`TestFinalVerifyIntegration`이 red로 잡는다).
+
 `stop-verify`의 **차단은 세션당 1회**다. 두 번째 Stop부터는 게이트를 여전히 실행하지만 red여도 세션을 막지 않고(무한루프 방지) stderr에 `GATE STILL RED`를 남긴다. 즉 **게이트를 통과하지 못한 채 끝난 step이 존재할 수 있다** — 그 사실은 stderr에만 남고 `execute.py`는 그것을 보지 않으므로, step이 `completed`로 커밋됐다는 것이 lint/build/test 통과를 뜻하지는 않는다. 게이트 red를 흔적 없이 통과시키는 것(성공 위장)만 막았을 뿐이다.
 
 ### CRITICAL: 실행기 오류는 step 실패가 아니다
@@ -98,6 +120,6 @@ python3 -m pytest scripts/ -q
 
 **"커밋하지 않는다"는 잔재를 없앤다는 뜻이 아니다.** 타임아웃은 에이전트가 파일을 고친 **뒤** 터지므로 워킹트리에 반쪽 편집이 남는다. 재실행은 그 위에서 step을 처음부터 다시 돌리고, 다음 성공 커밋의 `git add -A`가 잔재를 함께 담는다 — 커밋을 막은 효과는 한 step 뒤로 밀릴 뿐이다. 실행기는 자동으로 되돌리지 않는다(작업 파괴). 목록을 보고 **사람이** 이어 쓸지 버릴지 정한다. 이 문제가 없는 것은 작업 전 실패(쿼터 소진·CLI 부재)뿐이다.
 
-exit code: `1` = step 실패, `2` = blocked(사용자 개입 필요), `3` = 하네스 오류.
+exit code: `1` = 구현 실패(step 또는 phase 게이트), `2` = blocked(사용자 개입 필요), `3` = 하네스 오류.
 
-**exit 1은 좁다.** "step 구현이 3회 시도 후에도 실패했다"와 "이전 실행이 남긴 `error` step이 막고 있다" 둘뿐이다. 나머지는 전부 3이다 — phase 디렉터리·`index.json`·`step{N}.md` 부재, git 부재·checkout 실패, push 실패, 예상 못 한 예외. 판정 기준은 "step의 구현이 틀렸는가"이지 "무언가 실패했는가"가 아니다. 예상 못 한 예외는 트레이스백을 그대로 출력한 뒤 3으로 나간다 — 종료코드만 옮기고 삼키지 않는다.
+**exit 1은 좁다.** "step 구현이 3회 시도 후에도 실패했다", "이전 실행이 남긴 `error` step이 막고 있다", "모든 step이 통과한 뒤 phase 게이트(E2E)가 red다" 셋뿐이다. 나머지는 전부 3이다 — phase 디렉터리·`index.json`·`step{N}.md` 부재, git 부재·checkout 실패, push 실패, 예상 못 한 예외. 판정 기준은 "step의 구현이 틀렸는가"이지 "무언가 실패했는가"가 아니다. 예상 못 한 예외는 트레이스백을 그대로 출력한 뒤 3으로 나간다 — 종료코드만 옮기고 삼키지 않는다.
