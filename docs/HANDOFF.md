@@ -1,17 +1,19 @@
-# HANDOFF — phase 3 완료 / phase 4 방향 미정
+# HANDOFF — phase 3 완료 / phase 4·5 방향 확정, 구현 미착수
 
 > 이 문서는 새 세션이 현재 저장소 상태를 오해하지 않고 이어가기 위한 실행 계약이다. 이미 정본에 있는 요구사항·아키텍처·결정 상세를 반복하지 않고 경로로 참조한다.
 >
-> 기준 시각: 2026-07-27
+> 기준 시각: 2026-07-28
 > 현재 브랜치: `main` (PR #9 phase 3 · PR #10 하네스 개편 머지 완료)
 
 ## 1. 새 세션이 할 일
 
-**phase 3까지 끝났다. 다음 phase가 무엇인지는 아직 정해지지 않았다.**
+**phase 3까지 구현됐다. phase 4·5의 방향은 확정됐고 구현은 시작되지 않았다.**
 
-구현을 바로 시작하지 마라. 방향을 먼저 정한다 — 4절이 후보를 적어둔 곳이고, `$grilling`으로 압박한 뒤 `docs/PRD.md`·`docs/ADR.md`에 물질화하고 나서 `$harness`로 넘어간다.
+방향 확정의 정본은 `docs/PRD.md`의 'Phase 4 범위'·'Phase 5 범위' 절과 ADR-020~022다. 4절이 그 요약과 착수 순서를 적어둔 곳이다. **다음 단계는 `$harness`로 phase 4의 step을 설계하는 것**이며, 방향을 다시 열지 마라 — 이미 `$grilling` 성격의 압박을 거쳐 문서에 물질화됐다.
 
 **미해소 리스크가 하나 있다 (3절 말미).** phase 3은 유효한 독립 리뷰를 받지 않은 채 main에 있다.
+
+**phase 3 구현 감사에서 확인된 사실 (2026-07-28, 실측):** 유닛 260건·브라우저 E2E 4건·파이썬 99건 통과, lint 0건, 빌드 성공. 그러나 **fresh clone에서는 유닛 259건 통과 + 1건 skip**이며, skip되는 것이 씨앗 카탈로그 로드 테스트다(`catalog/spec-change-declaration-gate.test.ts:76-82`). `.uptake/sources/`가 없으면 `loadCatalog`가 씨앗 패턴을 `provenance-unresolved`로 거부해 **이식 화면이 빈 상태로 열린다.** 즉 "테스트 전부 초록"이 "제품이 동작함"을 뜻하지 않는다. `uptake init`이 이 콜드 스타트 문제를 명령으로 해소한다(4절).
 
 ## 2. 현재 판정
 
@@ -64,13 +66,35 @@ $review 8c5062c
 
 같은 사고가 재발하지 않도록 실행기가 `--disable-slash-commands`로 step 세션의 스킬 호출 능력을 제거했다(5절).
 
-## 4. phase 4 후보 — 아직 결정 아님
+## 4. phase 4·5 — 방향 확정 (구현 미착수)
 
-정본은 `docs/PRD.md`의 Phase 범위 절이다. 아래는 미정 상태의 후보이며, 착수 전에 `$grilling`으로 압박하고 문서에 물질화해야 한다.
+정본은 `docs/PRD.md`의 'Phase 4 범위'·'Phase 5 범위' 절과 ADR-020~022다. 요지: **기능을 늘리지 않고, 이미 있는 세 기능을 다섯 단계 명령과 디스크 산출물로 물질화한다.**
 
-- **카탈로그 확충** — 실물이 씨앗 1건뿐이다(`catalog/spec-change-declaration-gate.json`). **카탈로그를 넓게 채우는 것이 세 기능 전부의 전제다.** SURVEY→채택 경로가 열렸으니 이제 실제로 채울 수 있다.
-- **SURVEY 신뢰도 보강** — 위 "남아 있는 미검증" 항목. 재현 측정, 모노레포·비영어권 대응.
-- **이식 경험 정리** — SURVEY가 루트가 되면서 기존 이식 UI의 진입 동선이 재배치됐다. `docs/UI_GUIDE.md`가 잠정 상태다.
+```
+uptake init → uptake survey → uptake author → uptake verify → uptake apply
+   각 단계가 .uptake/runs/<id>/ 아래 산출물을 쓰고, 다음 단계가 그것을 읽는다
+```
+
+phase 3까지의 문제는 기능 부재가 아니라 **릴레이 부재**였다 — 세 위저드가 서로를 모르고, 인메모리 상태라 프로세스가 죽으면 사라지며, 중간 상태를 사람이 읽거나 리뷰할 수 없었다. 참고 선례는 Spec Kit이고, 가져오는 것은 "방법론을 원칙 → 단계별 명령 → 단계별 산출물 → 릴레이 → 단계 사이 게이트 → 적용의 실행 가능한 워크플로우로 배포한다"는 형식이다(ADR-020).
+
+**착수 순서 — phase 4와 5를 분리한다.** 총 작업량은 같으나 phase마다 엔진 변경이 **1건씩**으로 갈리고, 첫 증명이 빨라지며, step 수가 적어 `stop-verify` 세션당 1회 차단 문제(6절 말미)에 덜 노출된다.
+
+| | 범위 | 엔진 변경 | 증명할 것 |
+|---|---|---|---|
+| **phase 4** | `init` · `survey` · `author` | `extractFromCandidates`가 고정 revision을 받고 `revision-moved` 제거 (ADR-021) | `init`→`survey`→**프로세스 종료**→`author`가 디스크에서 이어받는다 |
+| **phase 5** | `verify` · `apply` | `applyGenerated` 순수화 + `bindingsHash` (ADR-022) | 5단계 관통, 대화형 승인, 재적용 차단 |
+
+**phase 4가 건드릴 기존 계약 하나** — `survey-adopt.ts:129-136`의 `revision-moved` 분기와 `AdoptResult`의 해당 reason, 그리고 `survey-adopt.test.ts:173`의 테스트를 제거·교체한다. `resolveSources`(`extract.ts:111`)가 조건 없이 `rev-parse HEAD`를 다시 읽는 것이 원인이며, 이는 "고정 revision에서만 읽는다"는 자기 계약 위반이다. 직접 저작 경로(`extractEvidence`)는 건드리지 않는다.
+
+**보류된 후보** (phase 4·5 이후 재검토):
+
+- **카탈로그 확충** — 실물이 씨앗 1건뿐이다(`catalog/spec-change-declaration-gate.json`). 워크플로우가 서면 채우는 노동 자체가 재현 가능해지므로 순서를 뒤로 뒀다.
+- **SURVEY 신뢰도 보강** — 3절 "남아 있는 미검증" 항목. 실측으로 확인된 것 하나: pytest 저장소에서 수집 예산의 **50.1%가 `doc/en/announce/release-*.rst`에 쓰였고 design-docs 212건이 budget-exhausted로 탈락**했다. 라운드로빈이 카테고리를 교대시키지만 **카테고리별 상한이 없어** 작은 카테고리가 소진되면 가장 큰 카테고리가 남은 예산을 흡수한다. 핵심 신호(hooks·ci·agent-instructions)가 굶지는 않았으나 프롬프트 절반이 노이즈다. `survey-rules.json`에 카테고리별 상한을 넣는 데이터 변경으로 해소된다.
+- **이식 산출물의 파라미터화** — `instantiate()`가 바인딩 중 checker만 읽으므로(`instantiate.ts:49`) 사용자가 채운 `spec-format`·`naming`은 생성물에 반영되지 않는다. 생성 경로 2개와 oracle도 상수다. phase 4·5의 명시적 비범위이며, 워크플로우가 선 뒤에 다룬다.
+- **웹 표면을 산출물 기반으로 이전** — 그때 웹의 상태 영속화가 함께 해소된다. phase 4·5는 웹을 건드리지 않는다.
+- **이식 경험 정리** — `docs/UI_GUIDE.md`가 잠정 상태다.
+
+**폐기된 후보** — SURVEY→AUTHORING을 웹 클라이언트 상태(prop·`key` 리마운트)로 잇는 handoff 설계는 진행하지 않는다. 파일 릴레이가 같은 일을 더 강하게 하며, 두 메커니즘을 함께 두면 릴레이가 두 곳에서 갈라진다(ADR-020). 그 설계에 포함됐던 **승격 경계 회귀 테스트**(corroborated 소스 <2 · 역할별 독립 그룹 <2 · 앵커 형태 · 자기검증)는 표면 무관하므로 phase 4의 수용 기준으로 흡수했다.
 
 ## 5. 완료된 제품 표면
 
