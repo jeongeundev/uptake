@@ -6,7 +6,7 @@
 ## 문서 지도
 - [`docs/PRD.md`](./docs/PRD.md) — 요구사항 (무엇을·누구를 위해) + **MVP 수용 기준** (구현 전 테스트로 옮길 대상)
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — 설계 (어떻게) + VERIFY 실행 계약 · 신뢰 경계 · 패턴 직렬화 계약
-- [`docs/ADR.md`](./docs/ADR.md) — 결정 기록 (왜) · ADR-001~022
+- [`docs/ADR.md`](./docs/ADR.md) — 결정 기록 (왜) · ADR-001~025
 - [`docs/UI_GUIDE.md`](./docs/UI_GUIDE.md) — UI 가이드 (※ 잠정, 미확정)
 
 ## 기술 스택
@@ -25,6 +25,8 @@
 - CRITICAL: **워크플로우의 정본은 CLI 명령과 디스크 산출물이다**(ADR-020). 각 단계는 `.uptake/runs/<id>/` 아래에 산출물을 쓰고 다음 단계가 그것을 읽는다. 웹앱은 같은 산출물을 읽는 **두 번째 표면**이며, 단계를 잇는 배선을 웹 클라이언트 상태로 만들지 마라 — 릴레이가 두 곳에서 갈라진다. **게이트 실패도 산출물을 남긴다**: 다음 단계가 소비할 성공 산출물만 만들지 않고, 실패 코드·폐기 근거·고정 revision은 기록한다. "실행하지 않음"과 "실행했지만 실패"를 디스크에서 구분할 수 있어야 한다.
 - CRITICAL: **고정 revision에서 읽는 단계는 HEAD를 다시 읽지 않는다**(ADR-021). SURVEY가 개시 시점에 한 번 고정하면 그것을 소비하는 단계는 그 값을 그대로 쓴다. 실패는 근거를 **실제로 읽을 수 없을 때만** 일어난다 — `revision-unresolvable`(커밋 해석 불가) · `provenance-unresolvable`(경로 읽기 불가). "HEAD가 움직였다"는 실패 사유가 아니다. 단, SURVEY를 거치지 않는 직접 저작은 **저작 개시 시점** HEAD를 고정한다 — 두 경로의 고정 시점이 다른 것은 정상이다.
 - CRITICAL: **엔진은 승인의 저장 방식을 몰라야 한다**(ADR-022). 적용 엔진은 저장 방식 어휘(`pending`/`approved`/`consumed`) 없는 승인 입력만 받고, 레코드 조립과 일회성 소비 봉인은 **호출자 책임**이다. 새 표면을 붙일 때 인메모리 저장소에 가짜 승인을 심지 마라 — 그것이 이 결합을 끊는 이유다. 해시 3중 대조(`contentHash`·`bindingsHash`·`targetBaseHash`)는 엔진에 남겨 모든 표면이 같은 보호를 받게 한다.
+- CRITICAL: **동봉 자산과 사용자 상태는 경로 기준이 다르다**(ADR-024). `survey-rules.json`·씨앗 `catalog/`·`templates/`·자기검증 fixture는 **설치 위치** 기준, `.uptake/`(METHOD.md·runs·sources)는 **프로젝트 루트** 기준이다. 새 코드에서 동봉 자산을 `process.cwd()`로 해석하지 마라 — uptake 저장소 밖에서 실행하는 순간 없는 파일이 된다. 판정에 쓰이는 자산은 복사하지 않는다(사본과 원본이 갈라진다). **적용은 그 자산을 실제로 읽는 코드 경로가 생길 때 한다** — 읽지 않는 자산을 미리 고치면 옳은지 검증할 실행이 없다. 설정 우선순위는 `명시 인자 > 환경변수 > 기본값`.
+- CRITICAL: **CLI는 카탈로그를 거치지 않으므로 층 1 보증을 소비 시점에 만든다**(ADR-025). 웹에서 이식 대상 패턴은 언제나 `loadCatalog`를 통과해서 들어오고 `instantiate`·`verify`는 provenance를 재검증하지 않는다 — 산출물을 직접 읽는 경로는 소비 직전에 `validatePatternValue`를 걸어라. 해시로 편집을 탐지하지 마라(원래 내용이 잘못이면 못 잡고, 산출물을 읽고 고칠 수 있다는 ADR-020의 전제와 싸운다). 그리고 **아무도 되읽지 않는 산출물을 릴레이에 넣지 마라** — 카탈로그 등재가 워크플로우에서 빠져 있는 이유다.
 - CRITICAL: 게이트의 **red는 exit code가 아니다** — 리포터 출력에서 `oracle.gateTestId` 테스트가 실패한 것만 red다. 리포터를 못 만든 실행(설치·설정·문법 오류, timeout, signal)은 `gate-error`이며 **음성 성공으로 계산하지 않는다**. 인프라 오류를 "위반을 잡았다"로 세는 것이 성공 위장의 가장 위험한 형태다. (ADR-008)
 - 패턴은 **직교하는 두 축**으로 분류한다 — `capability`(`generative`/`descriptive`, 판별 오라클 유무·ADR-012)와 `evidenceStatus`(`observed`/`corroborated`, 근거 repo 수·ADR-005). 둘 다 "tier"라고 부르지 않는다. **세 번째 축을 추가하지 마라** — 자생/상속 구분은 실재하는 문제지만 검증 가능한 판정 신호가 없어 분류에 쓰지 않는다. 근거 없는 딱지는 사용자에게 틀린 확신을 준다. (ADR-019)
 - CRITICAL: SURVEY의 수집 규칙("어디를 볼까")은 **생태계별로 확장 가능한 데이터**다. 코드에 박지 마라. 카테고리별 예산 배분 없이 한 카테고리가 전체를 독식하면 핵심 신호가 굶는다 — 실측으로 확인된 실패다. (ADR-018)
@@ -52,15 +54,19 @@ npm run test:e2e # E2E (playwright — 두 config 순차)
 npm run eval:proposer # 선택적 실제 proposer smoke (AC 아님; 키가 없으면 정상 skip)
 ```
 
-제품 워크플로우 (phase 4·5에서 구현 — ADR-020):
+제품 워크플로우 (phase 4·5에서 구현 — ADR-020). 진입은 `bin/uptake.ts`이고 배포 전까지 `npx tsx bin/uptake.ts <command>`로 부른다:
 ```
-uptake init                  # .uptake/METHOD.md · config.json 생성 (멱등, 네트워크 없음)
-uptake survey <repository>   # 저장소 조사 → survey.json (HEAD SHA 고정)
-uptake author --candidate <id> --source <repo2>   # → pattern.draft.json · 카탈로그 등재
+uptake init                  # .uptake/METHOD.md 생성 (멱등, 네트워크 없음)
+uptake survey <repository>   # 저장소 조사 → survey.json (HEAD SHA 고정, 실행할 때마다 새 run)
+uptake author --candidate <id>                    # → authoring.json (성공 시 pattern 포함)
 uptake verify --target <abs-path>                 # → generated.json · verify.json (양성 green + 음성 red)
 uptake apply                 # 대화형 승인 → 타깃 적용 → 봉인
 ```
-종료 코드: `0` 성공 · `1` 게이트 실패 · `2` 선행조건 미충족 · `3` 인프라 오류. `2`는 순서를 어겼다는 뜻이며 다음에 칠 명령을 출력한다.
+종료 코드: `0` 성공 · `1` 게이트 실패 · `2` 실행 전제 미충족 · `3` 인프라 오류. `2`는 "지금 이 명령을 실행할 수 없다 + 대신 무엇을 할지 알려준다"이며, 순서 위반과 **아직 배포되지 않은 명령**이 모두 여기 속한다.
+
+phase 4가 배포하는 것은 `init`·`survey`·`author` 셋이고, **CLI는 아직 없는 명령의 이름을 알지 않는다**(unknown → 명령 목록 + exit 2). 단계당 산출물은 **하나**이며 성공 판별자가 두 파일에 걸치지 않는다.
+
+CLI의 `author`는 **SURVEY 채택 경로 하나만** 태우고 채택 산출물은 항상 `descriptive`/`observed`다. **카탈로그에 등재하지 않는다**(ADR-025). 두 번째 소스 대조와 `generative` 승격은 후속 phase다 — `--source`·`--capability` 플래그를 임의로 되살리지 마라(ADR-023).
 
 실제 Anthropic proposer는 `ANTHROPIC_API_KEY`와 `UPTAKE_PROPOSER_MODEL`을 모두 요구한다. 구조화 출력(JSON schema)을 지원하는 모델을 명시해야 하며 권장 설정은 `UPTAKE_PROPOSER_MODEL=claude-opus-5`다(코드 기본값 없음).
 
