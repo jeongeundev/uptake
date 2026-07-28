@@ -6,7 +6,7 @@
 ## 문서 지도
 - [`docs/PRD.md`](./docs/PRD.md) — 요구사항 (무엇을·누구를 위해) + **MVP 수용 기준** (구현 전 테스트로 옮길 대상)
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — 설계 (어떻게) + VERIFY 실행 계약 · 신뢰 경계 · 패턴 직렬화 계약
-- [`docs/ADR.md`](./docs/ADR.md) — 결정 기록 (왜) · ADR-001~019
+- [`docs/ADR.md`](./docs/ADR.md) — 결정 기록 (왜) · ADR-001~022
 - [`docs/UI_GUIDE.md`](./docs/UI_GUIDE.md) — UI 가이드 (※ 잠정, 미확정)
 
 ## 기술 스택
@@ -21,7 +21,10 @@
 - CRITICAL: 생성물은 **자기검증**을 통과해야 한다 — 양성(준수→green) **그리고** 음성(심은 위반→red로 잡힘). green만으론 증명이 아니다. 성공 위장 절대 금지 — 실패는 정직하게 표면화. (ADR-008)
 - CRITICAL: 신뢰할 수 없는 repo 내용은 **데이터로 격리**한다(프롬프트 지시로 취급 금지). 생성 코드는 diff 미리보기+명시적 적용, 실행은 테스트 커맨드로 한정. (ARCHITECTURE.md)
 - 번역 엔진은 3단계(EXTRACT→ABSTRACT→INSTANTIATE). 패턴의 **스택-불변 본질**과 **스택-종속 결합점**을 분리하고, 구현만 교체한다. 환원 불가능한 핵심 가치 = ABSTRACT(떼어내기). (ADR-004)
-- 앱이 구현하는 범위는 phase마다 넓어진다 — MVP는 INSTANTIATE·VERIFY, phase 2가 EXTRACT·ABSTRACT를 앱 안으로 들였고(ADR-014), phase 3는 그 **앞단에 SURVEY(발견)를 놓아 제품 루트로 삼는다**(ADR-017). 사용자는 저장소만 지정하고 앱이 후보를 제안하며, intent는 입력이 아니라 산출이다. **현재 범위의 정본은 `docs/PRD.md`의 Phase 범위 절이다.**
+- 앱이 구현하는 범위는 phase마다 넓어진다 — MVP는 INSTANTIATE·VERIFY, phase 2가 EXTRACT·ABSTRACT를 앱 안으로 들였고(ADR-014), phase 3는 그 **앞단에 SURVEY(발견)를 놓아 제품 루트로 삼는다**(ADR-017). 사용자는 저장소만 지정하고 앱이 후보를 제안하며, intent는 입력이 아니라 산출이다. phase 4·5는 기능을 늘리지 않고 그 전체를 **다섯 단계 명령과 디스크 산출물로 물질화한다**(ADR-020). **현재 범위의 정본은 `docs/PRD.md`의 Phase 범위 절이다.**
+- CRITICAL: **워크플로우의 정본은 CLI 명령과 디스크 산출물이다**(ADR-020). 각 단계는 `.uptake/runs/<id>/` 아래에 산출물을 쓰고 다음 단계가 그것을 읽는다. 웹앱은 같은 산출물을 읽는 **두 번째 표면**이며, 단계를 잇는 배선을 웹 클라이언트 상태로 만들지 마라 — 릴레이가 두 곳에서 갈라진다. **게이트 실패도 산출물을 남긴다**: 다음 단계가 소비할 성공 산출물만 만들지 않고, 실패 코드·폐기 근거·고정 revision은 기록한다. "실행하지 않음"과 "실행했지만 실패"를 디스크에서 구분할 수 있어야 한다.
+- CRITICAL: **고정 revision에서 읽는 단계는 HEAD를 다시 읽지 않는다**(ADR-021). SURVEY가 개시 시점에 한 번 고정하면 그것을 소비하는 단계는 그 값을 그대로 쓴다. 실패는 근거를 **실제로 읽을 수 없을 때만** 일어난다 — `revision-unresolvable`(커밋 해석 불가) · `provenance-unresolvable`(경로 읽기 불가). "HEAD가 움직였다"는 실패 사유가 아니다. 단, SURVEY를 거치지 않는 직접 저작은 **저작 개시 시점** HEAD를 고정한다 — 두 경로의 고정 시점이 다른 것은 정상이다.
+- CRITICAL: **엔진은 승인의 저장 방식을 몰라야 한다**(ADR-022). 적용 엔진은 저장 방식 어휘(`pending`/`approved`/`consumed`) 없는 승인 입력만 받고, 레코드 조립과 일회성 소비 봉인은 **호출자 책임**이다. 새 표면을 붙일 때 인메모리 저장소에 가짜 승인을 심지 마라 — 그것이 이 결합을 끊는 이유다. 해시 3중 대조(`contentHash`·`bindingsHash`·`targetBaseHash`)는 엔진에 남겨 모든 표면이 같은 보호를 받게 한다.
 - CRITICAL: 게이트의 **red는 exit code가 아니다** — 리포터 출력에서 `oracle.gateTestId` 테스트가 실패한 것만 red다. 리포터를 못 만든 실행(설치·설정·문법 오류, timeout, signal)은 `gate-error`이며 **음성 성공으로 계산하지 않는다**. 인프라 오류를 "위반을 잡았다"로 세는 것이 성공 위장의 가장 위험한 형태다. (ADR-008)
 - 패턴은 **직교하는 두 축**으로 분류한다 — `capability`(`generative`/`descriptive`, 판별 오라클 유무·ADR-012)와 `evidenceStatus`(`observed`/`corroborated`, 근거 repo 수·ADR-005). 둘 다 "tier"라고 부르지 않는다. **세 번째 축을 추가하지 마라** — 자생/상속 구분은 실재하는 문제지만 검증 가능한 판정 신호가 없어 분류에 쓰지 않는다. 근거 없는 딱지는 사용자에게 틀린 확신을 준다. (ADR-019)
 - CRITICAL: SURVEY의 수집 규칙("어디를 볼까")은 **생태계별로 확장 가능한 데이터**다. 코드에 박지 마라. 카테고리별 예산 배분 없이 한 카테고리가 전체를 독식하면 핵심 신호가 굶는다 — 실측으로 확인된 실패다. (ADR-018)
@@ -38,14 +41,26 @@
 - 커밋 메시지는 conventional commits (feat:, fix:, docs:, refactor:).
 
 ## 명령어
-> 스캐폴딩 착수 후 확정. 계획상 예정 명령어:
+
+개발 명령 (구현됨):
 ```
 npm run dev      # 개발 서버 (로컬호스트)
 npm run build    # 프로덕션 빌드
 npm run lint     # ESLint
 npm run test     # 테스트 (vitest)
+npm run test:e2e # E2E (playwright — 두 config 순차)
 npm run eval:proposer # 선택적 실제 proposer smoke (AC 아님; 키가 없으면 정상 skip)
 ```
+
+제품 워크플로우 (phase 4·5에서 구현 — ADR-020):
+```
+uptake init                  # .uptake/METHOD.md · config.json 생성 (멱등, 네트워크 없음)
+uptake survey <repository>   # 저장소 조사 → survey.json (HEAD SHA 고정)
+uptake author --candidate <id> --source <repo2>   # → pattern.draft.json · 카탈로그 등재
+uptake verify --target <abs-path>                 # → generated.json · verify.json (양성 green + 음성 red)
+uptake apply                 # 대화형 승인 → 타깃 적용 → 봉인
+```
+종료 코드: `0` 성공 · `1` 게이트 실패 · `2` 선행조건 미충족 · `3` 인프라 오류. `2`는 순서를 어겼다는 뜻이며 다음에 칠 명령을 출력한다.
 
 실제 Anthropic proposer는 `ANTHROPIC_API_KEY`와 `UPTAKE_PROPOSER_MODEL`을 모두 요구한다. 구조화 출력(JSON schema)을 지원하는 모델을 명시해야 하며 권장 설정은 `UPTAKE_PROPOSER_MODEL=claude-opus-5`다(코드 기본값 없음).
 
