@@ -21,7 +21,10 @@
     {
       "step": 2,
       "name": "survey-rules-module",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-28T20:48:56+0900",
+      "summary": "loadSurveyRules의 기본 경로 해석(process.cwd() 기준 resolve)을 제거하고 survey-rules.json을 모듈 import로 읽도록 바꿨다(인자·env 지정 시에는 fs 읽기 그대로 유지). cwd 무관 동작·env 오버라이드·오버라이드 실패 케이스를 테스트로 추가했다.",
+      "completed_at": "2026-07-28T20:52:00+0900"
     },
     {
       "step": 3,

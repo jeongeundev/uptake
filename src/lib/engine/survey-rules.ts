@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 
 import { isId } from "@/lib/catalog/load";
 import type {
@@ -8,6 +7,8 @@ import type {
   SurveyRule,
   SurveyRuleSet,
 } from "@/types/survey";
+
+import defaultRuleSet from "../../../survey-rules.json";
 
 export class SurveyRulesError extends Error {
   constructor(message: string) {
@@ -141,11 +142,10 @@ function compilePattern(pattern: string, location: string): RegExp {
   }
 }
 
-export function loadSurveyRules(rulesPath?: string): CompiledSurveyRules {
-  const path =
-    rulesPath ??
-    process.env.UPTAKE_SURVEY_RULES ??
-    resolve("survey-rules.json");
+function loadRuleSetValue(path: string | undefined): unknown {
+  if (path === undefined) {
+    return defaultRuleSet;
+  }
 
   let source: string;
   try {
@@ -155,17 +155,20 @@ export function loadSurveyRules(rulesPath?: string): CompiledSurveyRules {
     throw new SurveyRulesError(`failed to read survey rules at ${path}: ${detail}`);
   }
 
-  let value: unknown;
   try {
-    value = JSON.parse(source);
+    return JSON.parse(source);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new SurveyRulesError(
       `failed to parse survey rules JSON at ${path}: ${detail}`,
     );
   }
+}
 
-  const ruleSet = parseRuleSet(value);
+export function loadSurveyRules(rulesPath?: string): CompiledSurveyRules {
+  const path = rulesPath ?? process.env.UPTAKE_SURVEY_RULES;
+
+  const ruleSet = parseRuleSet(loadRuleSetValue(path));
   return {
     budget: ruleSet.budget,
     exclude: ruleSet.exclude.map((pattern, index) =>

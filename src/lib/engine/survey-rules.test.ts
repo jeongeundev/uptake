@@ -168,4 +168,76 @@ describe("loadSurveyRules", () => {
       SurveyRulesError,
     );
   });
+
+  it("loads the bundled rules with no argument and no env override", () => {
+    const previous = process.env.UPTAKE_SURVEY_RULES;
+    delete process.env.UPTAKE_SURVEY_RULES;
+    try {
+      const result = loadSurveyRules();
+
+      expect(result.rules.length).toBeGreaterThan(0);
+      expect(result.budget.totalChars).toBeGreaterThan(0);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.UPTAKE_SURVEY_RULES;
+      } else {
+        process.env.UPTAKE_SURVEY_RULES = previous;
+      }
+    }
+  });
+
+  it("loads the bundled rules regardless of the current working directory", () => {
+    const previousCwd = process.cwd();
+    const previousEnv = process.env.UPTAKE_SURVEY_RULES;
+    delete process.env.UPTAKE_SURVEY_RULES;
+    const directory = mkdtempSync(join(tmpdir(), "uptake-survey-rules-cwd-"));
+    temporaryDirectories.push(directory);
+    try {
+      process.chdir(directory);
+      const result = loadSurveyRules();
+      expect(result.rules.length).toBeGreaterThan(0);
+    } finally {
+      process.chdir(previousCwd);
+      if (previousEnv === undefined) {
+        delete process.env.UPTAKE_SURVEY_RULES;
+      } else {
+        process.env.UPTAKE_SURVEY_RULES = previousEnv;
+      }
+    }
+  });
+
+  it("honors the UPTAKE_SURVEY_RULES override", () => {
+    const previous = process.env.UPTAKE_SURVEY_RULES;
+    const path = writeRules(validRules());
+    process.env.UPTAKE_SURVEY_RULES = path;
+    try {
+      const result = loadSurveyRules();
+      expect(result.rules.map(({ id }) => id)).toEqual([
+        "second-rule",
+        "first-rule",
+      ]);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.UPTAKE_SURVEY_RULES;
+      } else {
+        process.env.UPTAKE_SURVEY_RULES = previous;
+      }
+    }
+  });
+
+  it("rejects an invalid UPTAKE_SURVEY_RULES override with SurveyRulesError", () => {
+    const previous = process.env.UPTAKE_SURVEY_RULES;
+    process.env.UPTAKE_SURVEY_RULES = "/missing/survey-rules-override.json";
+    try {
+      expect(() => loadSurveyRules()).toThrowError(
+        expect.objectContaining({ name: "SurveyRulesError" }),
+      );
+    } finally {
+      if (previous === undefined) {
+        delete process.env.UPTAKE_SURVEY_RULES;
+      } else {
+        process.env.UPTAKE_SURVEY_RULES = previous;
+      }
+    }
+  });
 });
