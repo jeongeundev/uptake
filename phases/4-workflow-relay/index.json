@@ -13,7 +13,10 @@
     {
       "step": 1,
       "name": "survey-diagnostics",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-28T20:44:25+0900",
+      "summary": "CollectResult의 no-signal에 revision·skipped를 싣고, SurveyResult의 no-signal을 no-candidate와 같은 형태(repository·revision·collected·discardedEvidence·discardedCandidates 포함)로 확장했으며, survey-service.ts의 분기를 reason 나열이 아닌 필드 존재(\"repository\" in surveyed) 기반으로 바꿨다.",
+      "completed_at": "2026-07-28T20:52:00+0900"
     },
     {
       "step": 2,

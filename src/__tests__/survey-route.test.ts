@@ -243,6 +243,44 @@ describe("survey route boundary", () => {
     });
   });
 
+  it("reports no-signal with the pinned revision when no file matches a rule", async () => {
+    const path = join(sourceRoot, "example", "unmatched");
+    mkdirSync(path, { recursive: true });
+    writeFileSync(join(path, "index.ts"), "export {}\n");
+    execFileSync("git", ["init", "-q"], { cwd: path });
+    execFileSync("git", ["add", "."], { cwd: path });
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "user.name=Uptake Test",
+        "-c",
+        "user.email=uptake@example.test",
+        "commit",
+        "-q",
+        "-m",
+        "fixture",
+      ],
+      { cwd: path },
+    );
+    __setSurveyProposerForTests(createStubSurveyProposer({ candidates: [] }));
+
+    const response = await runSurvey(
+      surveyRequest({ repository: "example/unmatched" }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      status: "no-signal",
+      repository: "example/unmatched",
+      revision: expect.any(String),
+      collected: [],
+      skipped: [],
+      discardedEvidence: [],
+      discardedCandidates: [],
+    });
+  });
+
   it("returns a server error when survey rules cannot be loaded", async () => {
     process.env.UPTAKE_SURVEY_RULES = join(root, "missing-rules.json");
     __setSurveyProposerForTests(createStubSurveyProposer({ candidates: [candidate] }));

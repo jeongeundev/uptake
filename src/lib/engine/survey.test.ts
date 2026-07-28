@@ -316,6 +316,34 @@ describe("surveyRepository", () => {
     });
   });
 
+  it("carries repository, revision and empty collected on no-signal", async () => {
+    const sourceRoot = createSourceRoot({
+      "src/uncollected.ts": "not shown to the proposer",
+    });
+    const proposer = createStubSurveyProposer({
+      candidates: [candidate("documented-discipline")],
+    });
+
+    const result = await surveyRepository(
+      repository,
+      proposer,
+      rules(),
+      sourceRoot,
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: "no-signal",
+      repository,
+      revision: expect.any(String),
+      collected: [],
+      skipped: [],
+      discardedEvidence: [],
+      discardedCandidates: [],
+    });
+    expect(proposer.calls).toHaveLength(0);
+  });
+
   it("returns candidates and discard records in deterministic order", async () => {
     const sourceRoot = createSourceRoot();
     const proposer = createStubSurveyProposer({
