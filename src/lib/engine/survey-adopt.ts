@@ -29,7 +29,8 @@ export type AdoptResult =
       ok: false;
       reason:
         | "source-id-underivable"
-        | "revision-moved"
+        | "revision-unresolvable"
+        | "provenance-unresolvable"
         | "extract-failed"
         | "assembly-invalid";
       detail: string;
@@ -46,6 +47,26 @@ function deriveSourceId(repository: string): string | undefined {
 function extractionFailure(
   result: Exclude<ExtractResult, { ok: true }>,
 ): AdoptResult {
+  if (result.reason === "revision-unresolvable") {
+    return {
+      ok: false,
+      reason: "revision-unresolvable",
+      detail: result.detail,
+    };
+  }
+  if (
+    result.reason === "no-evidence" &&
+    result.discarded.length > 0 &&
+    result.discarded.every(
+      (candidate) => candidate.reason === "provenance-unresolved",
+    )
+  ) {
+    return {
+      ok: false,
+      reason: "provenance-unresolvable",
+      detail: result.detail,
+    };
+  }
   return {
     ok: false,
     reason: "extract-failed",
@@ -105,6 +126,7 @@ export async function adoptSurveyCandidate(
       {
         id: sourceId,
         repository: input.repository,
+        revision: input.revision,
         stack: "unspecified",
         isTargetStack: false,
         independenceGroup: sourceId,
@@ -127,13 +149,6 @@ export async function adoptSurveyCandidate(
     return extractionFailure(extracted);
   }
   const source = extracted.sources[0];
-  if (source.revision !== input.revision) {
-    return {
-      ok: false,
-      reason: "revision-moved",
-      detail: `Repository revision moved from ${input.revision} to ${source.revision}.`,
-    };
-  }
 
   const targetStackFact = extracted.targetStackFacts[0];
   const packageJson = resolveProvenance(

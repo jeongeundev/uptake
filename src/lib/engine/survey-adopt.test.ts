@@ -151,7 +151,7 @@ describe("adoptSurveyCandidate", () => {
     }
   });
 
-  it("rejects adoption when HEAD moved after SURVEY pinned its revision", async () => {
+  it("adopts successfully when HEAD moves after SURVEY pinned its revision", async () => {
     const fixture = createSourceRoot({
       "docs/method.md": "method\n",
       "scripts/check.ts": "check\n",
@@ -159,18 +159,39 @@ describe("adoptSurveyCandidate", () => {
     writeFileSync(join(fixture.repositoryRoot, "later.md"), "later\n");
     commit(fixture.repositoryRoot, "later");
 
+    const result = await adoptSurveyCandidate(
+      {
+        repository,
+        revision: fixture.revision,
+        candidate: candidate(),
+      },
+      fixture.sourceRoot,
+    );
+
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(result.pattern.sources[0].revision).toBe(fixture.revision);
+    }
+  });
+
+  it("reports revision-unresolvable when the pinned revision cannot be resolved", async () => {
+    const fixture = createSourceRoot({
+      "docs/method.md": "method\n",
+      "scripts/check.ts": "check\n",
+    });
+
     await expect(
       adoptSurveyCandidate(
         {
           repository,
-          revision: fixture.revision,
+          revision: "0".repeat(40),
           candidate: candidate(),
         },
         fixture.sourceRoot,
       ),
     ).resolves.toMatchObject({
       ok: false,
-      reason: "revision-moved",
+      reason: "revision-unresolvable",
     });
   });
 
@@ -259,7 +280,7 @@ describe("adoptSurveyCandidate", () => {
       ),
     ).resolves.toMatchObject({
       ok: false,
-      reason: "extract-failed",
+      reason: "provenance-unresolvable",
       detail: expect.stringContaining("provenance-unresolved"),
     });
   });

@@ -1,0 +1,49 @@
+{
+  "project": "uptake",
+  "phase": "4-workflow-relay",
+  "steps": [
+    {
+      "step": 0,
+      "name": "pinned-revision",
+      "status": "completed",
+      "started_at": "2026-07-28T20:38:45+0900",
+      "summary": "SourceSpec에 선택적 revision을 추가하고 resolveSources가 이를 존중하도록 고쳐(HEAD 재조회 없음), ExtractResult에 revision-unresolvable을 신설하고 no-evidence에 discarded를 실었으며, adoptSurveyCandidate가 SURVEY의 고정 revision을 그대로 넘기고 revision-moved 판정을 제거(revision-unresolvable/provenance-unresolvable로 대체)했다."
+    },
+    {
+      "step": 1,
+      "name": "survey-diagnostics",
+      "status": "pending"
+    },
+    {
+      "step": 2,
+      "name": "survey-rules-module",
+      "status": "pending"
+    },
+    {
+      "step": 3,
+      "name": "workflow-store",
+      "status": "pending"
+    },
+    {
+      "step": 4,
+      "name": "cli-init",
+      "status": "pending"
+    },
+    {
+      "step": 5,
+      "name": "cli-survey",
+      "status": "pending"
+    },
+    {
+      "step": 6,
+      "name": "cli-author",
+      "status": "pending"
+    },
+    {
+      "step": 7,
+      "name": "relay-integration",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-07-28T20:38:45+0900"
+}

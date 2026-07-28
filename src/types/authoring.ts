@@ -3,6 +3,7 @@ export type { Pattern, Provenance, Source } from "@/types/pattern";
 export type SourceSpec = {
   id: string;
   repository: string;
+  revision?: string; // 이미 고정된 커밋 SHA. 있으면 HEAD를 읽지 않는다 (ADR-021)
   stack: string;
   isTargetStack: boolean;
   independenceGroup: string;
