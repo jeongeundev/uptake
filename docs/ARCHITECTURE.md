@@ -1,13 +1,23 @@
 # 아키텍처
 
 ## 제품 표면
-**로컬-우선으로 실행되는 Next.js 15 앱.** 사용자 머신에서 돌며, phase 1의 노출 계층은 Node 런타임의 **Route Handler**다. Route Handler가 파일시스템 접근·Anthropic SDK 호출·로컬 툴체인 실행(vitest via `child_process`)을 서버측 엔진에 위임한다. 클라이언트는 카탈로그 탐색·결합점 확인·diff 검토·검증 결과 표시만 한다. 외부 백엔드 없음.
+**로컬-우선. 워크플로우의 정본은 CLI 명령과 디스크 산출물이다(phase 4·ADR-020).** 사용자는 `uptake init` → `survey` → `author` → `verify` → `apply` 다섯 단계를 실행하고, 각 단계는 `.uptake/runs/<id>/` 아래에 산출물을 남기며 다음 단계가 그것을 읽는다. 프로세스 경계를 넘어 재개되고, 중간 상태가 사람이 읽고 리뷰할 수 있는 파일로 남는다.
+
+**Next.js 15 앱은 두 번째 표면이다.** phase 1~3에서 만든 노출 계층은 Node 런타임의 **Route Handler**이며, Route Handler가 파일시스템 접근·Anthropic SDK 호출·로컬 툴체인 실행(vitest via `child_process`)을 서버측 엔진에 위임한다. 클라이언트는 카탈로그 탐색·결합점 확인·diff 검토·검증 결과 표시만 한다. 외부 백엔드 없음.
+
+**두 표면은 같은 엔진을 쓴다.** 엔진 함수는 인자만 받는 순수 함수이므로(유일한 예외였던 `applyGenerated`는 phase 5에서 해소 · ADR-022) CLI가 HTTP를 거치지 않고 직접 호출한다. 세션 쿠키·인메모리 workflow 저장소는 **웹 표면만의 관심사**다. 웹을 산출물 기반으로 옮기는 것은 후속이며, 그때까지 두 표면의 진행 상태는 공유되지 않는다.
 
 ## 디렉토리 구조
 > 아래는 스캐폴딩의 목표 구조다. 착수 후 확정.
 ```
+bin/uptake.mts          # CLI 진입 — 명령 디스패치·종료 코드 (phase 4)
 src/
-├── app/                # Next.js App Router
+├── workflow/           # 워크플로우 층 (phase 4) — 아래 '워크플로우 산출물 계약' 참조
+│   ├── paths.ts        # run 디렉터리 해석 · current 포인터
+│   ├── artifacts.ts    # 산출물 읽기/쓰기 + 스키마 검증
+│   ├── prerequisites.ts# 단계별 선행조건 (3-상태 판정)
+│   └── steps/          # init · survey · author · verify · apply
+├── app/                # Next.js App Router (두 번째 표면)
 │   ├── (ui)/           # 페이지: 카탈로그 / 이식 마법사 / diff·검증 결과
 │   └── api/            # 서버측 라우트: repo 읽기, 엔진 호출, 검증 실행
 ├── components/         # UI 컴포넌트
@@ -17,9 +27,31 @@ src/
 │   └── provenance/     # 소스 경로 resolve·검증 (환각 차단)
 ├── services/           # Anthropic SDK 래퍼, 로컬 툴체인 실행 래퍼(vitest)
 └── types/              # 패턴 스키마 등 타입 정의
+templates/              # init이 복사하는 원본 (METHOD.md · 에이전트 커맨드)
 catalog/                # 손 큐레이션 씨앗 패턴 파일들 (repo에 동봉 = 커먼즈의 실재 형태)
 survey-rules.json       # SURVEY 수집 규칙 (repo에 동봉된 데이터 — 코드가 아니다 · ADR-018)
 ```
+
+**사용자 저장소에 놓이는 것** (phase 4부터):
+```
+.uptake/
+├── METHOD.md           # 원칙 + 단계 체인. 설명이며 집행 주체가 아니다 (편집해도 게이트 불변)
+├── config.json         # sourceRoot · catalogDir · proposerModel
+├── runs/
+│   ├── current         # 현재 run 디렉터리명 한 줄
+│   └── 001-<repo-slug>/
+│       ├── run.json            # 단계 원장 (attemptedAt · status · exitCode)
+│       ├── survey.json         # 성공/실패 무관 항상 기록
+│       ├── authoring.json      # 성공/실패 무관 항상 기록
+│       ├── pattern.draft.json  # 성공 시에만
+│       ├── bindings.json       # phase 5
+│       ├── generated.json      # phase 5 — 검증된 정확한 생성물
+│       ├── verify.json         # phase 5
+│       ├── apply.json          # phase 5
+│       └── logs/{positive,negative}.log
+└── sources/            # 씨앗·근거 저장소 (기존 그대로 · gitignore)
+```
+`runs/`를 커밋하면 방법론 도입 과정이 리뷰 가능한 diff가 된다 — 커밋 여부는 사용자가 정하고 `init`은 `.gitignore` 제안만 한다(`logs/`는 제외 권장).
 
 ## 패턴
 - **서버측 엔진 우선**: 파일시스템·툴체인·LLM에 닿는 모든 것은 서버측(route handlers / server actions)에서만. 클라이언트 컴포넌트는 인터랙션(카탈로그 선택·diff 검토·승인)에만.
@@ -54,12 +86,63 @@ survey-rules.json       # SURVEY 수집 규칙 (repo에 동봉된 데이터 — 
 
 **개방형 발견은 더 이상 E2 비전이 아니다 — phase 3에서 SURVEY로 본선 승격됐다(ADR-017).** phase 2까지는 사용자가 "무엇을 추출할지"를 지정해야 했고 ADR-014가 개방형을 E2로 미뤄뒀으나, 그 전제가 타깃 사용자와 모순된다는 판단으로 폐기됐다 — intent를 지정할 수 있는 사용자는 이미 도구가 필요 없다. phase 3는 저장소 하나만 받아 후보를 제안하는 **SURVEY**를 흐름의 맨 앞에 놓고, 기존 EXTRACT·ABSTRACT는 그 결과를 소비한다(아래 'SURVEY 계약').
 
+**phase 4는 이 흐름 전체를 다섯 개의 명령과 디스크 산출물로 물질화한다(ADR-020).** 위 세 블록은 기능으로는 존재했으나 서로를 몰랐다 — 각 위저드가 인메모리 저장소에 살아 프로세스가 죽으면 사라지고, 앞 블록의 산출물을 뒤 블록이 읽는 경로가 없었다. phase 4·5는 각 단계가 산출물을 파일로 남기고 다음 단계가 그것을 입력으로 소비하게 한다(아래 '워크플로우 산출물 계약').
+
+## 워크플로우 산출물 계약 (phase 4·5)
+방법론을 **실행 가능한 워크플로우로 배포**하는 계약이다(ADR-020). 새 기능이 아니라 기존 엔진 위에 얹는 **명령 표면 · 산출물 영속화 · 선행조건 검사** 세 층이다.
+
+**단계와 릴레이.**
+
+| 명령 | 읽기 | 성공 산출물 | 항상 쓰는 것 |
+|---|---|---|---|
+| `init` | — | `METHOD.md` · `config.json` · `survey-rules.json` | — |
+| `survey <repository>` | `config.json` · `survey-rules.json` · 소스@HEAD | `survey.json` (status=`surveyed`) | `survey.json` · `run.json` |
+| `author --candidate <id> --source <repo2>` | `survey.json` | `pattern.draft.json` · `catalog/<id>.json` | `authoring.json` · `run.json` |
+| `verify --target <abs>` | `pattern.draft.json` · 타깃 | `generated.json` · `verify.json` (status=`verified`) | `bindings.json` · `verify.json` · `logs/` · `run.json` |
+| `apply` | `generated.json` · `bindings.json` · `verify.json` | 타깃 파일 · `apply.json` | `run.json` |
+
+각 명령은 인자 없이 `runs/current`가 가리키는 run에서 앞 단계 산출물을 찾는다. **프로세스 경계를 넘어 재개된다** — 중단 후 같은 명령을 다시 치면 이어진다.
+
+**3-상태 모델.** 산출물 타입은 이미 판별 유니온이고 실패 진단을 싣고 있으므로, **엔진이 반환한 것을 그대로 직렬화한다.** 새 상태 타입을 만들지 않는다.
+
+| 상태 | 디스크 | 판정 |
+|---|---|---|
+| 미실행 | 파일 부재 | 선행조건 미충족 |
+| 실행·실패 | 파일 존재 + `status` ∈ 실패 집합 | 선행조건 미충족 (사유를 그대로 보인다) |
+| 실행·성공 | 파일 존재 + `status` ∈ 성공 집합 | 다음 단계 진행 |
+
+**게이트 실패도 산출물을 남긴다.** 다음 단계가 소비할 성공 산출물만 만들지 않으며, 실패 코드·폐기 근거·고정 revision은 기록한다 — "실행하지 않은 상태"와 "실행했지만 실패한 상태"를 디스크에서 구분할 수 있어야 한다. `no-candidate`가 이미 `repository`·`revision`·`collected`·`skipped`·`discardedEvidence`·`discardedCandidates`를 반환하므로 그대로 쓴다. **로그 파일은 항상 남긴다** — `gate-error`·`timeout`의 원인은 리포터 출력에만 있고, 그것이 사라지면 인프라 오류와 진짜 red를 구별할 수 없다.
+
+**종료 코드.** `0` 성공 · `1` 게이트 실패(작업이 틀렸다) · `2` 선행조건 미충족(순서가 틀렸다) · `3` 인프라 오류. 하네스 실행기(`scripts/execute.py`)의 분류 원칙과 같다 — 인프라 오류를 결과로 계산하지 않는다.
+
+**exit 2가 워크플로우를 가르친다.** 선행 산출물이 없거나 실패 상태면 실행하지 않고 다음에 칠 명령을 알려준다. 워크플로우를 문서가 아니라 명령이 가르치는 지점이다.
+
+**`METHOD.md`의 지위.** 원칙(provenance·서술적 태도·양성/음성·불신 격리·2층 게이트·직교 2축·자생/상속 한계)과 단계 체인을 담는다. **설명 문서이며 집행 주체가 아니다** — 편집해도 게이트는 바뀌지 않고 게이트의 정본은 코드다. 파일 첫 줄에 그 사실을 못박는다. 각 원칙에는 집행 게이트의 **상태 이름**만 붙인다(`negative-not-caught`·`provenance-unresolved` 등). `file:line`은 쓰지 않는다 — 라인 드리프트로 죽은 참조가 된다. Spec Kit의 `constitution.md`와 이름을 달리한 이유가 이것이다: 거기서는 사용자가 작성·개정하는 문서지만, uptake의 원칙은 제품이 집행하는 불변식이다.
+
+**revision 고정.** `survey`가 개시 시점 HEAD SHA를 한 번 고정하면 이후 단계는 HEAD를 다시 읽지 않는다. 실패는 근거를 실제로 읽을 수 없을 때만 일어난다 — 커밋 객체 해석 불가는 `revision-unresolvable`, 경로 읽기 불가는 `provenance-unresolvable`. HEAD 이동은 실패 사유가 아니다(ADR-021).
+
+**verify → apply 결속 (phase 5).** `verify`가 instantiate한 **정확한 파일들**을 `generated.json`에 고정하고, `apply`는 **다시 생성하지 않고** 그 파일을 읽어 적용한다. 세 해시를 검증 시점에 고정하고 적용 직전 재계산해 대조한다.
+
+| 해시 | 대상 | 잡는 사고 |
+|---|---|---|
+| `contentHash` | `generated.json`의 files | 검증 후 생성물 변조 |
+| `bindingsHash` | `bindings.json`의 해소된 바인딩 (정렬) | 검증 후 바인딩 편집 |
+| `targetBaseHash` | 타깃 트리(`.git` 제외) | 검증 후 타깃 변경 |
+
+`bindingsHash`는 `contentHash`로 대체되지 않는다 — 현재 `instantiate`는 바인딩 중 checker 하나만 읽으므로 `spec-format`·`naming`을 바꿔도 생성물이 변하지 않고, 그러면 대조가 조용히 통과한다. 이식 산출물의 파라미터화가 진행되면 두 해시가 함께 움직이게 되고, 그때도 **무엇이 바뀌었는지 정확한 이름으로 실패**하게 해준다.
+
+**승인 경계 (phase 5).** 엔진은 저장 방식 어휘 없는 **승인 입력**만 받고, 조립과 일회성 소비는 호출자 책임이다(ADR-022). CLI의 승인은 `apply` 안에서 검증 결과와 적용 파일을 보인 뒤 **대화형으로** 받고 즉시 적용·봉인한다 — 승인이 프로세스보다 오래 살지 않는다. 자동 승인 플래그와 산출물 직접 편집은 공식 경로가 아니며, **stdin이 TTY가 아니면 `apply`는 실패한다**(동의를 받을 수 없는 환경에서 자동 승인으로 흐르지 않는다).
+
+**에이전트 통합은 어댑터다.** 파일 기반 워크플로우가 본질이고, `.claude/commands/uptake.*.md` 같은 설치물은 그 위의 선택 어댑터다(`--agent` 옵션). Spec Kit이 35개 이상의 통합을 갖는 것은 그쪽의 규모 문제이며 uptake가 흉내낼 이유가 없다.
+
 ## SURVEY 계약 (phase 3)
 저장소 하나를 받아 그 저장소의 개발 체계 후보를 제시하는 계약이다. 제품의 루트이며(ADR-017), 아래 저작 계약의 **앞단**이다. SURVEY는 새 등재 경로를 만들지 않는다 — `AuthoringRequest`를 자동 조립해 기존 EXTRACT·ABSTRACT·승인·등재를 **그대로 통과**시킨다. intent를 없애는 것이 아니라 자동 생성하는 것이다.
 
 **범위.** 저장소 1개 → 후보 N개 → 사용자가 고른 하나 → `observed`/`descriptive` 등재. 다중 저장소 동시 분석·유사 프로젝트 추천·`corroborated` 자동 승급·`generative` 자동 합성은 범위 밖이다(PRD 'Phase 3 범위').
 
 **입력과 revision 고정.** 사용자는 `UPTAKE_SOURCE_ROOT` 아래 저장소 식별자만 지정한다. intent는 입력이 아니다. SURVEY 개시 시 그 저장소의 HEAD 커밋 SHA를 고정하고, 이후 모든 수집과 근거 읽기는 **그 revision에서만** 일어난다 — 경로 목록은 `git ls-tree -r --name-only <revision>`, 내용은 `git show <revision>:<path>`다. **작업 트리를 읽지 않는다.** 분석 대상 저장소는 읽기 전용이며 checkout·네트워크·코드 실행이 없다(기존 provenance resolve 계약과 동일).
+
+**고정 revision은 후속 단계까지 이어진다.** SURVEY 결과를 채택하는 단계는 그 revision을 그대로 쓰고 **HEAD를 다시 읽지 않는다.** 실패는 근거를 실제로 읽을 수 없을 때만 일어난다 — `revision-unresolvable`(커밋 객체 해석 불가) 또는 `provenance-unresolvable`(경로 읽기 불가). "SURVEY 이후 HEAD가 움직였다"는 실패 사유가 아니다(ADR-021). SURVEY를 거치지 않는 직접 저작 경로는 **저작 개시 시점** HEAD를 고정한다 — 두 경로의 고정 시점이 다른 것은 정상이다.
 
 **수집 — "어디를 볼까"는 결정적 데이터가 정한다(ADR-018).** 수집 규칙은 코드가 아니라 repo 동봉 데이터 파일이다. 각 규칙은 `{ id, include }`(정규식 문자열 목록)이고, 전역 `exclude`와 예산(파일별 상한·총 상한)을 함께 싣는다.
 
@@ -365,10 +448,13 @@ type Pattern = {
 - 연산은 `replace` 하나뿐이다. 두 번째 패턴이 실제로 다른 연산을 요구할 때 늘린다(over-engineering 금지).
 
 ## 상태 관리
+> 아래는 **웹 표면**의 상태 계약이다(phase 1~3). CLI 표면의 상태는 디스크 산출물이며 위 '워크플로우 산출물 계약'을 따른다. 두 표면의 진행 상태는 공유되지 않는다(ADR-020).
+
 - **서버 상태**(카탈로그·결합점 탐지·생성·검증·적용 결과)는 서버측에서 계산해 전달. 로컬-우선이라 원격 상태 저장소 없음.
 - **클라이언트 상태**(패턴 선택·diff 검토·UI상의 승인 조작)는 최소한의 로컬 상태(useState/useReducer)로.
 - **승인은 클라이언트 상태가 아니다.** 위의 "승인 여부"는 화면 조작일 뿐이고, 적용 API는 **클라이언트가 보낸 boolean을 신뢰하지 않는다.** 승인 레코드는 서버 프로세스 수명의 in-memory 저장소에 남으며 타깃 경로 · `patternId` · 산출물 해시 · 타깃 base 해시 · 동결된 argv에 결속된다. 검증 성공 시 발급한 불투명 `verificationId`를 명시적 승인 이벤트가 `pending`에서 `approved`로 전이하고, 적용은 이 ID를 한 번 소비해 `consumed`로 만든다. 프로세스 재시작 뒤에는 재검증·재승인이 필요하며, UI를 우회한 직접 API 호출이나 승인 ID 재사용으로 쓰는 경로는 없다(AC-10).
-- **HTTP 세션 소유권**: Route Handler가 불투명 session ID를 HttpOnly 쿠키로 발급하고, 서버측 in-memory workflow 저장소가 session ID와 workflow를 결속한다. 기존 `approval-store`의 엔진 계약은 바꾸지 않는다. workflow/API 계층이 `verificationId`가 현재 소유 세션의 workflow에서 발급된 것인지 확인한 뒤 승인·적용 엔진을 호출한다.
+- **HTTP 세션 소유권**: Route Handler가 불투명 session ID를 HttpOnly 쿠키로 발급하고, 서버측 in-memory workflow 저장소가 session ID와 workflow를 결속한다. workflow/API 계층이 `verificationId`가 현재 소유 세션의 workflow에서 발급된 것인지 확인한 뒤 승인·적용 엔진을 호출한다.
+  - **부분 대체 (ADR-022 · phase 5)**: "기존 `approval-store`의 엔진 계약은 바꾸지 않는다"는 단서는 폐기된다. `applyGenerated`는 저장 방식 어휘 없는 **승인 입력**을 인자로 받는 순수 함수가 되고, 승인 레코드 조립과 일회성 소비는 **호출자 책임**이 된다 — 웹은 위 in-memory 저장소가, CLI는 검증 산출물이 각자 조립한다. 위 문단의 나머지(클라이언트 boolean 불신, 해시 결속, 세션 소유권 확인, ID 재사용 경로 없음)는 유효하다. 해시는 `bindingsHash`가 추가되어 셋이 된다.
 - **수명**: workflow 상태는 서버 프로세스 수명에만 존재한다. 사용자가 이전 입력을 바꾸면 downstream 생성·검증·승인 상태를 폐기한다. 새로고침 진행 상태 복구와 서버 재시작 후 복구는 phase 1 비목표이며, 사용자는 재검증·재승인한다.
 
 ## Phase 1 UI/API 결정
