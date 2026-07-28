@@ -15,6 +15,7 @@ __pycache__/
 # phase execution outputs
 phases/**/phase*-output.json
 phases/**/step*-output.json
+phases/**/final-verify-output.json
 
 # local secrets / scratch
 .env.local

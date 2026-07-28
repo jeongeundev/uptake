@@ -57,6 +57,8 @@ class StepExecutor:
     MAX_RETRIES = 3
     AGENT_MODEL = "sonnet"
     TIMEOUT = 1800
+    FINAL_VERIFY_SCRIPT = "scripts/final-verify.sh"
+    FINAL_VERIFY_TIMEOUT = 3600
     FEAT_MSG = "feat({phase}): step {num} — {name}"
     CHORE_MSG = "chore({phase}): step {num} output"
     TZ = timezone(timedelta(hours=9))
@@ -97,6 +99,7 @@ class StepExecutor:
         guardrails = self._load_guardrails()
         self._ensure_created_at()
         self._execute_all_steps(guardrails)
+        self._final_verify()
         self._finalize()
 
     # --- timestamps ---
@@ -450,6 +453,116 @@ class StepExecutor:
                     break
 
             self._execute_single_step(pending, guardrails)
+
+    # --- 최종 검증 (phase 경계) ---
+
+    def _commit_final_verify(self):
+        """게이트 red를 git 히스토리에 남긴다.
+
+        성공만 커밋되면(`_finalize`의 `git add -A`) 실패는 로컬 워킹트리에만
+        남아 사라진다 — 실패를 정직하게 표면화한다는 ADR-008의 요구다.
+
+        `git add -A`를 쓰지 않는다: 최종 검증은 회귀를 고치는 작업 도중에도
+        재실행되고, 그때 워킹트리에는 아직 커밋할 준비가 안 된 수정이 섞여 있다.
+        기록 파일만 담는다.
+        """
+        self._run_git(
+            "add", "--",
+            f"phases/{self._phase_dir_name}/index.json",
+            "phases/index.json",
+        )
+        if self._run_git("diff", "--cached", "--quiet").returncode != 0:
+            msg = f"chore({self._phase_name}): final verify failed"
+            r = self._run_git("commit", "-m", msg)
+            if r.returncode != 0:
+                print(f"  WARN: 최종 검증 기록 커밋 실패: {r.stderr.strip()}")
+
+    def _final_verify(self):
+        """모든 step이 통과한 뒤 phase당 **한 번** 도는 E2E 회귀 게이트.
+
+        step 종료마다 도는 stop-verify(lint/build/test)와 분리한 이유는
+        `scripts/final-verify.sh` 주석에 있다. red면 `_finalize`에 들어가지
+        않으므로 phase는 완료로 기록되지 않는다 — 이것이 이 게이트의 전부다.
+
+        스크립트를 **띄우지 못한 것**(부재·타임아웃)은 red가 아니라 하네스
+        오류이며 exit 3으로 나간다. 인프라 오류를 게이트 결과로 계산하지 않는
+        것은 ADR-008의 `gate-error`, 그리고 이 파일의 실행기 오류 처리와 같은
+        원칙이다.
+        """
+        script = ROOT / self.FINAL_VERIFY_SCRIPT
+        started_at = self._stamp()
+
+        with progress_indicator("Final verify (E2E)") as pi:
+            try:
+                r = subprocess.run(
+                    ["bash", str(script)],
+                    cwd=self._root, capture_output=True, text=True,
+                    timeout=self.FINAL_VERIFY_TIMEOUT,
+                )
+                launched = True
+                exit_code, stdout, stderr = r.returncode, r.stdout, r.stderr
+            except subprocess.TimeoutExpired:
+                launched = False
+                exit_code, stdout = -1, ""
+                stderr = f"최종 검증 타임아웃: {self.FINAL_VERIFY_TIMEOUT}s 초과"
+            except OSError as e:
+                # FileNotFoundError 포함 — 스크립트가 없거나 bash를 띄우지 못한 경우.
+                launched = False
+                exit_code, stdout = -1, ""
+                stderr = f"최종 검증을 띄우지 못했습니다: {e!r}"
+        elapsed = int(pi.elapsed)
+
+        finished_at = self._stamp()
+        # raw 로그는 step{N}-output.json과 같은 취급이다 — 로컬에만 남기고(.gitignore)
+        # 커밋되는 요약은 index.json에 쓴다.
+        self._write_json(
+            self._phase_dir / "final-verify-output.json",
+            {
+                "command": f"bash {self.FINAL_VERIFY_SCRIPT}",
+                "exitCode": exit_code,
+                "startedAt": started_at,
+                "finishedAt": finished_at,
+                "stdout": stdout,
+                "stderr": stderr,
+            },
+        )
+
+        if not launched:
+            status = "harness-error"
+        elif exit_code == 0:
+            status = "passed"
+        else:
+            status = "failed"
+
+        index = self._read_json(self._index_file)
+        index["final_verify"] = {
+            "status": status,
+            "exit_code": exit_code,
+            "at": finished_at,
+            "duration_sec": elapsed,
+        }
+        self._write_json(self._index_file, index)
+
+        if status == "passed":
+            print(f"  ✓ Final verify (E2E) [{elapsed}s]")
+            return
+
+        print(f"\n  ✗ 최종 검증 실패 (exit {exit_code}) [{elapsed}s]")
+        print(f"    상세: phases/{self._phase_dir_name}/final-verify-output.json")
+        if stderr.strip():
+            print(f"    stderr: {stderr.strip()[-500:]}")
+
+        if not launched:
+            print(f"    최종 검증을 실행하지 못했습니다 — 게이트 red가 아니라 하네스 오류입니다.")
+            print(f"    phase는 완료로 기록되지 않았습니다. 원인 해소 후 같은 명령을 재실행하세요.")
+            sys.exit(3)
+
+        print(f"    phase를 완료로 기록하지 않습니다.")
+        print(f"    회귀를 고친 뒤 같은 명령을 재실행하면 step은 전부 completed이므로")
+        print(f"    최종 검증부터 다시 돕니다.")
+        self._update_top_index("error")
+        self._commit_final_verify()
+        sys.exit(1)
 
     def _finalize(self):
         index = self._read_json(self._index_file)
