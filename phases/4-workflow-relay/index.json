@@ -29,7 +29,10 @@
     {
       "step": 3,
       "name": "workflow-store",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-28T20:51:04+0900",
+      "summary": "src/workflow/paths.ts(.uptake는 프로젝트 루트, templates/는 import.meta.url 설치 위치 기준으로 해석하고 run id NNN-<slug> 채번·runs/current 읽기/쓰기 제공) · artifacts.ts(SurveyResult·AdoptResult 타입을 재사용해 survey.json·authoring.json을 원자적으로 쓰고, 형태가 깨지면 WorkflowArtifactError를 던지는 읽기 제공) · prerequisites.ts(3-상태 StageState 판정과 runs/current 기반 currentSurveyState)를 추가했다.",
+      "completed_at": "2026-07-29T00:18:00+0900"
     },
     {
       "step": 4,
