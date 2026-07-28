@@ -3,6 +3,7 @@ execute.py 리팩터링 안전망 테스트.
 리팩터링 전후 동작이 동일한지 검증한다.
 """
 
+import contextlib
 import json
 import os
 import subprocess
@@ -773,3 +774,253 @@ class TestCheckBlockers:
         with pytest.raises(SystemExit) as exc_info:
             inst._check_blockers()
         assert exc_info.value.code == 2
+
+
+# ---------------------------------------------------------------------------
+# _final_verify — phase 경계의 E2E 회귀 게이트
+# ---------------------------------------------------------------------------
+
+def _git_ok(*args):
+    return subprocess.CompletedProcess(list(args), 0, stdout="", stderr="")
+
+
+class TestFinalVerify:
+    """step마다 도는 lint/build/test(stop-verify)와 분리된 게이트.
+
+    red면 phase를 완료로 기록하지 않는다 — 그것이 이 게이트의 전부다.
+    """
+
+    @staticmethod
+    def _script(returncode, stdout="", stderr=""):
+        done = subprocess.CompletedProcess(["bash"], returncode, stdout=stdout, stderr=stderr)
+        return patch("subprocess.run", return_value=done)
+
+    def test_green_records_passed(self, executor):
+        with self._script(0, stdout="4 passed"):
+            executor._final_verify()
+
+        index = json.loads(executor._index_file.read_text())
+        assert index["final_verify"]["status"] == "passed"
+        assert index["final_verify"]["exit_code"] == 0
+        assert "completed_at" not in index   # 완료 기록은 _finalize의 몫이다
+
+    def test_red_exits_1(self, executor, top_index):
+        executor._run_git = MagicMock(side_effect=_git_ok)
+        with self._script(1, stdout="1 failed"):
+            with pytest.raises(SystemExit) as exc_info:
+                executor._final_verify()
+
+        assert exc_info.value.code == 1
+
+    def test_red_marks_phase_error_not_completed(self, executor, top_index):
+        executor._run_git = MagicMock(side_effect=_git_ok)
+        with self._script(1):
+            with pytest.raises(SystemExit):
+                executor._final_verify()
+
+        index = json.loads(executor._index_file.read_text())
+        assert index["final_verify"]["status"] == "failed"
+        assert "completed_at" not in index
+        top = json.loads(top_index.read_text())
+        assert top["phases"][0]["status"] == "error"
+
+    def test_red_commits_the_evidence(self, executor, top_index):
+        """성공만 커밋되면 red는 로컬에만 남아 사라진다(ADR-008)."""
+        calls = []
+
+        def fake_git(*args):
+            calls.append(args)
+            if args[:2] == ("diff", "--cached"):
+                return subprocess.CompletedProcess(list(args), 1)   # 스테이징에 변경 있음
+            return _git_ok(*args)
+
+        executor._run_git = fake_git
+        with self._script(1):
+            with pytest.raises(SystemExit):
+                executor._final_verify()
+
+        commit_msgs = [c[2] for c in calls if c[0] == "commit"]
+        assert commit_msgs == ["chore(mvp): final verify failed"]
+        # 게이트가 만든 빌드 산출물·수정 중인 파일을 함께 담지 않는다
+        add_calls = [c for c in calls if c[0] == "add"]
+        assert all("-A" not in c for c in add_calls)
+
+    def test_writes_raw_output_evidence(self, executor, top_index):
+        executor._run_git = MagicMock(side_effect=_git_ok)
+        with self._script(1, stdout="OUT", stderr="ERR"):
+            with pytest.raises(SystemExit):
+                executor._final_verify()
+
+        rec = json.loads((executor._phase_dir / "final-verify-output.json").read_text())
+        assert rec["exitCode"] == 1
+        assert rec["stdout"] == "OUT"
+        assert rec["stderr"] == "ERR"
+        assert rec["command"] == "bash scripts/final-verify.sh"
+        assert rec["startedAt"] and rec["finishedAt"]
+
+    def test_missing_script_is_harness_error(self, executor, top_index):
+        """게이트를 **띄우지 못한 것**은 red가 아니다 — ADR-008의 gate-error."""
+        with patch("subprocess.run", side_effect=FileNotFoundError("final-verify.sh")):
+            with pytest.raises(SystemExit) as exc_info:
+                executor._final_verify()
+
+        assert exc_info.value.code == 3
+        index = json.loads(executor._index_file.read_text())
+        assert index["final_verify"]["status"] == "harness-error"
+        top = json.loads(top_index.read_text())
+        assert top["phases"][0]["status"] == "pending"   # phase가 red인 게 아니다
+
+    def test_timeout_is_harness_error(self, executor, top_index):
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("bash", 3600)):
+            with pytest.raises(SystemExit) as exc_info:
+                executor._final_verify()
+
+        assert exc_info.value.code == 3
+        index = json.loads(executor._index_file.read_text())
+        assert index["final_verify"]["status"] == "harness-error"
+        assert "3600" in json.loads(
+            (executor._phase_dir / "final-verify-output.json").read_text()
+        )["stderr"]
+
+    def test_invokes_the_shared_script(self, executor):
+        """CI와 같은 명령을 부른다 — 정의가 갈라지지 않게 스크립트 하나만 부른다."""
+        with self._script(0) as run_mock:
+            executor._final_verify()
+
+        cmd = run_mock.call_args[0][0]
+        assert cmd[0] == "bash"
+        assert cmd[1].endswith("scripts/final-verify.sh")
+        assert run_mock.call_args[1]["timeout"] == ex.StepExecutor.FINAL_VERIFY_TIMEOUT
+
+
+class TestRunWiring:
+    """게이트가 '마지막 step 뒤 한 번'에 걸려 있는지 — 순서가 배선의 전부다."""
+
+    @staticmethod
+    def _quiet(executor):
+        return [
+            patch.object(executor, "_print_header"),
+            patch.object(executor, "_check_blockers"),
+            patch.object(executor, "_checkout_branch"),
+            patch.object(executor, "_load_guardrails", return_value=""),
+            patch.object(executor, "_ensure_created_at"),
+        ]
+
+    def test_gate_runs_between_steps_and_finalize(self, executor):
+        order = []
+        with contextlib.ExitStack() as stack:
+            for p in self._quiet(executor):
+                stack.enter_context(p)
+            stack.enter_context(patch.object(
+                executor, "_execute_all_steps", side_effect=lambda g: order.append("steps")))
+            stack.enter_context(patch.object(
+                executor, "_final_verify", side_effect=lambda: order.append("verify")))
+            stack.enter_context(patch.object(
+                executor, "_finalize", side_effect=lambda: order.append("finalize")))
+            executor.run()
+
+        assert order == ["steps", "verify", "finalize"]
+
+    def test_step_failure_skips_the_gate(self, executor):
+        """step이 실패하면 게이트를 돌릴 대상 자체가 없다 — E2E 시간을 태우지 않는다."""
+        with contextlib.ExitStack() as stack:
+            for p in self._quiet(executor):
+                stack.enter_context(p)
+            stack.enter_context(patch.object(
+                executor, "_execute_all_steps", side_effect=SystemExit(1)))
+            fv = stack.enter_context(patch.object(executor, "_final_verify"))
+            stack.enter_context(patch.object(executor, "_finalize"))
+            with pytest.raises(SystemExit):
+                executor.run()
+
+        fv.assert_not_called()
+
+
+class TestFinalVerifyIntegration:
+    """subprocess를 mock하지 않고 스크립트를 실제로 돌린다.
+
+    '정확히 한 번'은 배선 실수(루프 안 호출·이중 호출)로 쉽게 깨지고 단위
+    테스트로는 드러나지 않으므로, 호출 횟수를 스크립트가 직접 센다.
+    """
+
+    @staticmethod
+    def _install_script(tmp_project, counter: Path, exit_code: int):
+        d = tmp_project / "scripts"
+        d.mkdir(parents=True, exist_ok=True)
+        p = d / "final-verify.sh"
+        p.write_text(f'#!/bin/bash\necho run >> "{counter}"\nexit {exit_code}\n')
+        p.chmod(0o755)
+
+    @staticmethod
+    def _agent_completes_step(executor):
+        """에이전트 대역 — step이 스스로 index.json을 completed로 바꾸는 실제 계약."""
+        def fake(step, preamble):
+            index = json.loads(executor._index_file.read_text())
+            for s in index["steps"]:
+                if s["step"] == step["step"]:
+                    s["status"] = "completed"
+                    s["summary"] = "done"
+            executor._index_file.write_text(json.dumps(index, ensure_ascii=False))
+            return {"step": step["step"], "name": step["name"],
+                    "exitCode": 0, "stdout": "", "stderr": ""}
+        return patch.object(executor, "_invoke_agent", side_effect=fake)
+
+    def _run_phase(self, executor, tmp_project):
+        executor._use_current_branch = True
+        stack = contextlib.ExitStack()
+        stack.enter_context(patch.object(ex, "ROOT", tmp_project))
+        stack.enter_context(self._agent_completes_step(executor))
+        stack.enter_context(patch.object(executor, "_run_git", side_effect=_git_ok))
+        stack.enter_context(patch.object(executor, "_commit_step"))
+        return stack
+
+    def test_runs_exactly_once_after_the_last_step(self, executor, tmp_project, top_index):
+        counter = tmp_project / "calls"
+        self._install_script(tmp_project, counter, 0)
+
+        with self._run_phase(executor, tmp_project):
+            executor.run()
+
+        assert counter.read_text().splitlines() == ["run"]
+        top = json.loads(top_index.read_text())
+        assert top["phases"][0]["status"] == "completed"
+        assert "completed_at" in json.loads(executor._index_file.read_text())
+
+    def test_red_blocks_phase_completion(self, executor, tmp_project, top_index):
+        counter = tmp_project / "calls"
+        self._install_script(tmp_project, counter, 1)
+
+        with self._run_phase(executor, tmp_project):
+            with pytest.raises(SystemExit) as exc_info:
+                executor.run()
+
+        assert exc_info.value.code == 1
+        assert counter.read_text().splitlines() == ["run"]   # red여도 한 번뿐이다
+
+        index = json.loads(executor._index_file.read_text())
+        assert "completed_at" not in index                   # phase 미완료
+        assert index["final_verify"]["status"] == "failed"
+        assert json.loads(top_index.read_text())["phases"][0]["status"] == "error"
+        # step들은 completed로 남는다 — 회귀는 phase의 결과이지 특정 step의 실패가 아니다
+        assert all(s["status"] == "completed" for s in index["steps"])
+
+    def test_rerun_after_fix_resumes_at_the_gate(self, executor, tmp_project, top_index):
+        """재실행은 에이전트를 다시 부르지 않고 게이트부터 돈다."""
+        counter = tmp_project / "calls"
+        self._install_script(tmp_project, counter, 1)
+        with self._run_phase(executor, tmp_project):
+            with pytest.raises(SystemExit):
+                executor.run()
+
+        self._install_script(tmp_project, counter, 0)   # 회귀를 고쳤다
+        executor._use_current_branch = True
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(patch.object(ex, "ROOT", tmp_project))
+            agent = stack.enter_context(patch.object(executor, "_invoke_agent"))
+            stack.enter_context(patch.object(executor, "_run_git", side_effect=_git_ok))
+            executor.run()
+
+        agent.assert_not_called()
+        assert counter.read_text().splitlines() == ["run", "run"]
+        assert json.loads(top_index.read_text())["phases"][0]["status"] == "completed"
+        assert json.loads(executor._index_file.read_text())["final_verify"]["status"] == "passed"
