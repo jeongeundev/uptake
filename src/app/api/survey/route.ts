@@ -6,7 +6,7 @@ import {
   sessionIdFor,
   statusCode,
 } from "@/app/api/http";
-import { configuredSurveyProposer } from "@/app/api/survey/proposer";
+import { configuredSurveyProposer } from "@/services/survey-proposer";
 import {
   AnthropicProposerConfigurationError,
   AnthropicProposerResponseError,

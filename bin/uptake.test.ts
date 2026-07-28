@@ -6,12 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // This exercises bin/uptake.ts's own wiring (argv -> runCli -> console/exit),
 // in-process via mocked process.exit — distinct from step 7's integration
 // test, which spawns `npx tsx bin/uptake.ts` as a real subprocess.
-class ProcessExitCalled extends Error {
-  constructor(public readonly code: number) {
-    super(`process.exit(${code})`);
-  }
-}
-
+//
+// bin/uptake.ts awaits runCli before calling process.exit, and since the
+// file compiles to CommonJS (no package.json "type": "module"), that await
+// cannot be a top-level await — it runs inside a fire-and-forget async
+// function. That means process.exit is called after the module's own
+// synchronous body (and thus the dynamic import() below) has already
+// settled, so this helper waits on process.exit itself rather than on
+// import() rejecting.
 let root: string;
 let previousArgv: string[];
 let previousCwd: string;
@@ -43,21 +45,21 @@ async function runBin(
   vi.spyOn(console, "error").mockImplementation((line: string) => {
     stderr.push(line);
   });
+
+  let resolveExit: (code: number) => void;
+  const exited = new Promise<number>((resolve) => {
+    resolveExit = resolve;
+  });
   vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
-    throw new ProcessExitCalled(code ?? 0);
+    resolveExit(code ?? 0);
+    return undefined as never;
   }) as never);
 
   process.argv = ["node", "uptake", ...args];
 
-  try {
-    await import("./uptake");
-  } catch (error) {
-    if (error instanceof ProcessExitCalled) {
-      return { code: error.code, stdout, stderr };
-    }
-    throw error;
-  }
-  throw new Error("expected bin/uptake.ts to call process.exit");
+  await import("./uptake");
+  const code = await exited;
+  return { code, stdout, stderr };
 }
 
 describe("bin/uptake.ts", () => {

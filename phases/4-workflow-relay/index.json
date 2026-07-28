@@ -45,7 +45,10 @@
     {
       "step": 5,
       "name": "cli-survey",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-29T00:28:16+0900",
+      "summary": "src/services/survey-proposer.ts(구 app/api/survey/proposer.ts 이동)와 src/workflow/steps/survey.ts(runSurveyCommand: 규칙·proposer 설정을 먼저 검사해 실패 시 run 없이 exit 2, 이후 매 실행마다 새 run 생성·성공/실패 무관 survey.json 기록·current 갱신, surveyed→0/repository-unresolved·revision-unpinnable→2/no-signal·no-candidate→1)를 추가하고 cli.ts에 survey 명령을 연결했다. bin/uptake.ts는 runCli가 비동기가 되면서 fire-and-forget async main()으로 바뀌었다.",
+      "completed_at": "2026-07-29T00:41:35+0900"
     },
     {
       "step": 6,

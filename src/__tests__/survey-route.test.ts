@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { POST as approveDraft } from "@/app/api/authoring/drafts/[draftId]/approve/route";
 import { POST as registerDraft } from "@/app/api/authoring/drafts/[draftId]/register/route";
-import { __setSurveyProposerForTests } from "@/app/api/survey/proposer";
+import { __setSurveyProposerForTests } from "@/services/survey-proposer";
 import { POST as runSurvey } from "@/app/api/survey/route";
 import { POST as adoptCandidate } from "@/app/api/survey/[surveyId]/candidates/[candidateId]/adopt/route";
 import { __resetAuthoringStoreForTests } from "@/services/authoring-store";

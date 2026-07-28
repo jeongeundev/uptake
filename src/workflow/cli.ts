@@ -1,4 +1,5 @@
 import { runInit } from "@/workflow/steps/init";
+import { runSurveyCommand } from "@/workflow/steps/survey";
 
 export type CliOutcome = {
   exitCode: 0 | 1 | 2 | 3;
@@ -6,7 +7,7 @@ export type CliOutcome = {
   stderr: string[];
 };
 
-const KNOWN_COMMANDS = ["init"] as const;
+const KNOWN_COMMANDS = ["init", "survey"] as const;
 type KnownCommand = (typeof KNOWN_COMMANDS)[number];
 
 function isKnownCommand(value: string | undefined): value is KnownCommand {
@@ -24,7 +25,11 @@ function usageLines(): string[] {
   ];
 }
 
-function runKnownCommand(command: KnownCommand, root?: string): CliOutcome {
+async function runKnownCommand(
+  command: KnownCommand,
+  args: string[],
+  root?: string,
+): Promise<CliOutcome> {
   if (command === "init") {
     const result = runInit(root);
     if (result.ok) {
@@ -40,15 +45,27 @@ function runKnownCommand(command: KnownCommand, root?: string): CliOutcome {
     };
   }
 
-  return { exitCode: 2, stdout: [], stderr: usageLines() };
+  const [repository] = args;
+  if (repository === undefined) {
+    return {
+      exitCode: 2,
+      stdout: [],
+      stderr: ["Usage: uptake survey <repository>"],
+    };
+  }
+  const result = await runSurveyCommand(repository, root);
+  const lines = result.message.split("\n");
+  return result.exitCode === 0
+    ? { exitCode: 0, stdout: lines, stderr: [] }
+    : { exitCode: result.exitCode, stdout: [], stderr: lines };
 }
 
-export function runCli(argv: string[], root?: string): CliOutcome {
-  const [command] = argv;
+export async function runCli(argv: string[], root?: string): Promise<CliOutcome> {
+  const [command, ...args] = argv;
 
   if (!isKnownCommand(command)) {
     return { exitCode: 2, stdout: [], stderr: usageLines() };
   }
 
-  return runKnownCommand(command, root);
+  return runKnownCommand(command, args, root);
 }
