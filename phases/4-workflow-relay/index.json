@@ -7,7 +7,8 @@
       "name": "pinned-revision",
       "status": "completed",
       "started_at": "2026-07-28T20:38:45+0900",
-      "summary": "SourceSpec에 선택적 revision을 추가하고 resolveSources가 이를 존중하도록 고쳐(HEAD 재조회 없음), ExtractResult에 revision-unresolvable을 신설하고 no-evidence에 discarded를 실었으며, adoptSurveyCandidate가 SURVEY의 고정 revision을 그대로 넘기고 revision-moved 판정을 제거(revision-unresolvable/provenance-unresolvable로 대체)했다."
+      "summary": "SourceSpec에 선택적 revision을 추가하고 resolveSources가 이를 존중하도록 고쳐(HEAD 재조회 없음), ExtractResult에 revision-unresolvable을 신설하고 no-evidence에 discarded를 실었으며, adoptSurveyCandidate가 SURVEY의 고정 revision을 그대로 넘기고 revision-moved 판정을 제거(revision-unresolvable/provenance-unresolvable로 대체)했다.",
+      "completed_at": "2026-07-28T20:44:25+0900"
     },
     {
       "step": 1,
