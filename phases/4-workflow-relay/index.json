@@ -37,7 +37,10 @@
     {
       "step": 4,
       "name": "cli-init",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-29T00:18:20+0900",
+      "summary": "templates/METHOD.md(다섯 단계 체인 + 상태 이름만 붙인 원칙 + 콜드 스타트 설명)를 추가하고, src/workflow/steps/init.ts(멱등 복사)·src/workflow/cli.ts(문자열 목록 기반 디스패치, unknown → exit 2)·bin/uptake.ts(process.exit 단일 호출 얇은 진입점)로 CLI 표면을 열었다. init만 아는 명령이며 verify·apply는 코드에 없다.",
+      "completed_at": "2026-07-29T00:32:00+0900"
     },
     {
       "step": 5,
