@@ -67,7 +67,12 @@ export async function runAuthorCommand(
         discarded: adopted.discarded,
         targetStackFacts: adopted.targetStackFacts,
       }
-    : { status: adopted.reason, candidateId, detail: adopted.detail };
+    : {
+        status: adopted.reason,
+        candidateId,
+        detail: adopted.detail,
+        discarded: adopted.discarded,
+      };
 
   writeAuthoringArtifact(runId, authoringArtifact, root);
   const path = join(runDir(runId, root), "authoring.json");

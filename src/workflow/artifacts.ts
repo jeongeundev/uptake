@@ -49,6 +49,7 @@ export type AuthoringArtifact =
       status: AdoptFailure["reason"];
       candidateId: string;
       detail: AdoptFailure["detail"];
+      discarded?: AdoptFailure["discarded"];
     };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -130,7 +131,10 @@ function isAuthoringArtifactShape(value: unknown): value is AuthoringArtifact {
     );
   }
 
-  return isString(value.detail);
+  return (
+    isString(value.detail) &&
+    (value.discarded === undefined || Array.isArray(value.discarded))
+  );
 }
 
 function isErrnoException(
