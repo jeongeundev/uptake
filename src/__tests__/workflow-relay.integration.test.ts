@@ -320,6 +320,34 @@ describe("workflow relay: init -> survey -> author across process boundaries", (
   );
 
   it(
+    "exits 3 when the survey artifact on disk is corrupt",
+    () => {
+      const corruptProjectRoot = makeTempDir("uptake-relay-corrupt-project-");
+      const surveyed = runUptake(["survey", surveyRepository], {
+        cwd: corruptProjectRoot,
+        env,
+      });
+      expect(surveyed.exitCode).toBe(0);
+
+      const runsRoot = resolve(corruptProjectRoot, ".uptake", "runs");
+      const runId = readFileSync(resolve(runsRoot, "current"), "utf8").trim();
+      writeFileSync(resolve(runsRoot, runId, "survey.json"), "{ not json");
+
+      const result = runUptake(["author", "--candidate", validCandidateId], {
+        cwd: corruptProjectRoot,
+        env,
+      });
+
+      // A corrupt artifact is an infrastructure error: neither "never ran" (2)
+      // nor a gate failure (1). Without this the three-state model's third
+      // branch is only covered by a mocked throw.
+      expect(result.exitCode).toBe(3);
+      expect(result.stderr).toContain("survey.json");
+    },
+    CLI_TIMEOUT_MS,
+  );
+
+  it(
     "rejects commands that are not yet deployed, listing the available ones",
     () => {
       for (const command of ["verify", "apply", "nonexistent"]) {
