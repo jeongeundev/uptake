@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   __setSurveyProposerForTests,
   configuredSurveyProposer,
-} from "@/app/api/survey/proposer";
+} from "@/services/survey-proposer";
 import { createAnthropicProposerFromEnv } from "@/services/proposer-anthropic";
 import { createStubSurveyProposer } from "@/services/proposer-stub";
 

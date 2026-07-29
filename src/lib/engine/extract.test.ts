@@ -127,6 +127,79 @@ describe("extractEvidence", () => {
     }
   });
 
+  it("uses a pinned source revision instead of re-reading HEAD", async () => {
+    const sourceRoot = createSourceRoot();
+    const repositoryRoot = join(sourceRoot, "github.com/example/source");
+    createRepository(sourceRoot, "github.com/example/source", {
+      "method.md": "observed method\n",
+    });
+    const pinnedRevision = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+    }).trim();
+    writeFileSync(join(repositoryRoot, "later.md"), "later\n");
+    execFileSync("git", ["add", "."], { cwd: repositoryRoot });
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "user.name=Uptake Test",
+        "-c",
+        "user.email=uptake@example.test",
+        "commit",
+        "-q",
+        "-m",
+        "later",
+      ],
+      { cwd: repositoryRoot },
+    );
+
+    const pinnedRequest = request();
+    pinnedRequest.sources[0] = {
+      ...pinnedRequest.sources[0],
+      revision: pinnedRevision,
+    };
+    const proposer = createStubProposer({
+      fileCandidates: [
+        {
+          sourceId: "source-one",
+          path: "method.md",
+          roleId: "spec-artifact",
+          rationale: "The file records the specification.",
+        },
+      ],
+    });
+
+    const result = await extractEvidence(pinnedRequest, proposer, sourceRoot);
+
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(result.sources[0].revision).toBe(pinnedRevision);
+      expect(proposer.calls.fileCandidates[0].files).toEqual(["method.md"]);
+    }
+  });
+
+  it("reports revision-unresolvable when a pinned revision cannot be resolved", async () => {
+    const sourceRoot = createSourceRoot();
+    createRepository(sourceRoot, "github.com/example/source", {
+      "method.md": "observed method\n",
+    });
+    const pinnedRequest = request();
+    pinnedRequest.sources[0] = {
+      ...pinnedRequest.sources[0],
+      revision: "0".repeat(40),
+    };
+    const proposer = createStubProposer({});
+
+    await expect(
+      extractEvidence(pinnedRequest, proposer, sourceRoot),
+    ).resolves.toMatchObject({
+      ok: false,
+      reason: "revision-unresolvable",
+    });
+    expect(proposer.calls.fileCandidates).toHaveLength(0);
+  });
+
   it("discards a proposed path that does not exist at the pinned revision", async () => {
     const sourceRoot = createSourceRoot();
     createRepository(sourceRoot, "github.com/example/source", {

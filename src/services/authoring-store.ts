@@ -28,6 +28,7 @@ export type AuthoringError = {
     | "invalid-request"
     | "draft-not-found"
     | "source-unresolved"
+    | "revision-unresolvable"
     | "no-evidence"
     | "contrast-failed"
     | "oracle-not-anchor"

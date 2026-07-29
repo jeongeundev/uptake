@@ -26,11 +26,15 @@ export type CollectResult =
     }
   | {
       ok: false;
-      reason:
-        | "repository-unresolved"
-        | "revision-unpinnable"
-        | "no-signal";
+      reason: "repository-unresolved" | "revision-unpinnable";
       detail: string;
+    }
+  | {
+      ok: false;
+      reason: "no-signal";
+      detail: string;
+      revision: string;
+      skipped: SkippedSignal[];
     };
 
 type AssignedPath = { path: string; ruleId: string };
@@ -160,6 +164,8 @@ export function collectSignalFiles(
       ok: false,
       reason: "no-signal",
       detail: `No signal file could be collected from ${repository} at ${revision}.`,
+      revision,
+      skipped,
     };
   }
 

@@ -96,7 +96,7 @@ export async function runSurvey(
     sourceRoot(),
   );
   if (!surveyed.ok) {
-    return surveyed.reason === "no-candidate"
+    return "repository" in surveyed
       ? {
           status: surveyed.reason,
           detail: surveyed.detail,

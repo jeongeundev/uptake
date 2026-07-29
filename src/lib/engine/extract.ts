@@ -33,8 +33,14 @@ export type ExtractResult =
     }
   | {
       ok: false;
-      reason: "source-unresolved" | "no-evidence";
+      reason: "source-unresolved" | "revision-unresolvable";
       detail: string;
+    }
+  | {
+      ok: false;
+      reason: "no-evidence";
+      detail: string;
+      discarded: DiscardedCandidate[];
     };
 
 type ResolvedSource = {
@@ -108,7 +114,9 @@ function resolveSources(
         detail: `Could not resolve source ${sourceSpec.id}.`,
       };
     }
-    const revision = gitOutput(repositoryRoot, ["rev-parse", "HEAD"]);
+    const pinnedRevision = sourceSpec.revision;
+    const revision =
+      pinnedRevision ?? gitOutput(repositoryRoot, ["rev-parse", "HEAD"]);
     const files =
       revision === undefined
         ? undefined
@@ -123,6 +131,13 @@ function resolveSources(
       !revisionPattern.test(revision) ||
       files === undefined
     ) {
+      if (pinnedRevision !== undefined) {
+        return {
+          ok: false,
+          reason: "revision-unresolvable",
+          detail: `Could not resolve pinned revision ${pinnedRevision} for source ${sourceSpec.id}.`,
+        };
+      }
       return {
         ok: false,
         reason: "source-unresolved",
@@ -220,6 +235,7 @@ function extractResolvedCandidates(
       ok: false,
       reason: "no-evidence",
       detail: `No proposed file candidate resolved to evidence. Discarded reasons: ${reasons}.`,
+      discarded,
     };
   }
 

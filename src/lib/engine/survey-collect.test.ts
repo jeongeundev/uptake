@@ -319,4 +319,33 @@ describe("collectSignalFiles", () => {
       reason: "no-signal",
     });
   });
+
+  it("carries the pinned revision and skipped signals on no-signal", () => {
+    const sourceRoot = createSourceRoot();
+    createRepository(sourceRoot, "github.com/example/source", {
+      "docs/unreadable.md": "x".repeat(20),
+    });
+
+    const result = collectSignalFiles(
+      "github.com/example/source",
+      rules(
+        [{ id: "docs", include: [/^docs\//] }],
+        { perFileChars: 4, totalChars: 1 },
+      ),
+      sourceRoot,
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: "no-signal",
+      revision: expect.stringMatching(/^[0-9a-f]{40}$/),
+      skipped: [
+        {
+          path: "docs/unreadable.md",
+          ruleId: "docs",
+          reason: "budget-exhausted",
+        },
+      ],
+    });
+  });
 });

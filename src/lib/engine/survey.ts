@@ -37,15 +37,12 @@ export type SurveyResult =
     }
   | {
       ok: false;
-      reason:
-        | "repository-unresolved"
-        | "revision-unpinnable"
-        | "no-signal";
+      reason: "repository-unresolved" | "revision-unpinnable";
       detail: string;
     }
   | {
       ok: false;
-      reason: "no-candidate";
+      reason: "no-signal" | "no-candidate";
       detail: string;
       repository: string;
       revision: string;
@@ -97,6 +94,19 @@ export async function surveyRepository(
 ): Promise<SurveyResult> {
   const collected = collectSignalFiles(repository, rules, sourceRoot);
   if (!collected.ok) {
+    if (collected.reason === "no-signal") {
+      return {
+        ok: false,
+        reason: "no-signal",
+        detail: collected.detail,
+        repository,
+        revision: collected.revision,
+        collected: [],
+        skipped: collected.skipped,
+        discardedEvidence: [],
+        discardedCandidates: [],
+      };
+    }
     return collected;
   }
 

@@ -1,0 +1,78 @@
+{
+  "project": "uptake",
+  "phase": "4-workflow-relay",
+  "steps": [
+    {
+      "step": 0,
+      "name": "pinned-revision",
+      "status": "completed",
+      "started_at": "2026-07-28T20:38:45+0900",
+      "summary": "SourceSpec에 선택적 revision을 추가하고 resolveSources가 이를 존중하도록 고쳐(HEAD 재조회 없음), ExtractResult에 revision-unresolvable을 신설하고 no-evidence에 discarded를 실었으며, adoptSurveyCandidate가 SURVEY의 고정 revision을 그대로 넘기고 revision-moved 판정을 제거(revision-unresolvable/provenance-unresolvable로 대체)했다.",
+      "completed_at": "2026-07-28T20:44:25+0900"
+    },
+    {
+      "step": 1,
+      "name": "survey-diagnostics",
+      "status": "completed",
+      "started_at": "2026-07-28T20:44:25+0900",
+      "summary": "CollectResult의 no-signal에 revision·skipped를 싣고, SurveyResult의 no-signal을 no-candidate와 같은 형태(repository·revision·collected·discardedEvidence·discardedCandidates 포함)로 확장했으며, survey-service.ts의 분기를 reason 나열이 아닌 필드 존재(\"repository\" in surveyed) 기반으로 바꿨다.",
+      "completed_at": "2026-07-28T20:48:56+0900"
+    },
+    {
+      "step": 2,
+      "name": "survey-rules-module",
+      "status": "completed",
+      "started_at": "2026-07-28T20:48:56+0900",
+      "summary": "loadSurveyRules의 기본 경로 해석(process.cwd() 기준 resolve)을 제거하고 survey-rules.json을 모듈 import로 읽도록 바꿨다(인자·env 지정 시에는 fs 읽기 그대로 유지). cwd 무관 동작·env 오버라이드·오버라이드 실패 케이스를 테스트로 추가했다.",
+      "completed_at": "2026-07-28T20:51:04+0900"
+    },
+    {
+      "step": 3,
+      "name": "workflow-store",
+      "status": "completed",
+      "started_at": "2026-07-28T20:51:04+0900",
+      "summary": "src/workflow/paths.ts(.uptake는 프로젝트 루트, templates/는 import.meta.url 설치 위치 기준으로 해석하고 run id NNN-<slug> 채번·runs/current 읽기/쓰기 제공) · artifacts.ts(SurveyResult·AdoptResult 타입을 재사용해 survey.json·authoring.json을 원자적으로 쓰고, 형태가 깨지면 WorkflowArtifactError를 던지는 읽기 제공) · prerequisites.ts(3-상태 StageState 판정과 runs/current 기반 currentSurveyState)를 추가했다.",
+      "completed_at": "2026-07-29T00:18:20+0900"
+    },
+    {
+      "step": 4,
+      "name": "cli-init",
+      "status": "completed",
+      "started_at": "2026-07-29T00:18:20+0900",
+      "summary": "templates/METHOD.md(다섯 단계 체인 + 상태 이름만 붙인 원칙 + 콜드 스타트 설명)를 추가하고, src/workflow/steps/init.ts(멱등 복사)·src/workflow/cli.ts(문자열 목록 기반 디스패치, unknown → exit 2)·bin/uptake.ts(process.exit 단일 호출 얇은 진입점)로 CLI 표면을 열었다. init만 아는 명령이며 verify·apply는 코드에 없다.",
+      "completed_at": "2026-07-29T00:28:15+0900"
+    },
+    {
+      "step": 5,
+      "name": "cli-survey",
+      "status": "completed",
+      "started_at": "2026-07-29T00:28:16+0900",
+      "summary": "src/services/survey-proposer.ts(구 app/api/survey/proposer.ts 이동)와 src/workflow/steps/survey.ts(runSurveyCommand: 규칙·proposer 설정을 먼저 검사해 실패 시 run 없이 exit 2, 이후 매 실행마다 새 run 생성·성공/실패 무관 survey.json 기록·current 갱신, surveyed→0/repository-unresolved·revision-unpinnable→2/no-signal·no-candidate→1)를 추가하고 cli.ts에 survey 명령을 연결했다. bin/uptake.ts는 runCli가 비동기가 되면서 fire-and-forget async main()으로 바뀌었다.",
+      "completed_at": "2026-07-29T00:42:55+0900"
+    },
+    {
+      "step": 6,
+      "name": "cli-author",
+      "status": "completed",
+      "started_at": "2026-07-29T00:42:55+0900",
+      "summary": "src/workflow/steps/author.ts(runAuthorCommand: current run의 survey.json에서 candidate·revision을 그대로 읽어 adoptSurveyCandidate를 호출, HEAD 재조회 없음; 성공/실패 무관 authoring.json 기록; drafted→0/채택 실패 전부→1/미실행·실패·candidate 없음→2)를 추가하고 cli.ts에 author --candidate <id> 명령을 연결했다. author는 카탈로그를 등재하지 않으며 validatePatternValue는 소비 시점(phase 5) 몫으로 남겨 직렬화 왕복만 테스트로 확인했다.",
+      "completed_at": "2026-07-29T06:24:59+0900"
+    },
+    {
+      "step": 7,
+      "name": "relay-integration",
+      "status": "completed",
+      "started_at": "2026-07-29T06:24:59+0900",
+      "summary": "src/__tests__/workflow-relay.integration.test.ts를 추가해 init→survey→author를 uptake 저장소 밖 cwd에서 별개 tsx 프로세스로 관통시켰다(순번 채번·current 갱신·고정 revision 재사용(ADR-021)·validatePatternValue 통과·미배포 명령 exit 2·카탈로그 불변까지 확인). 그 과정에서 tsx가 `@/` 별칭을 cwd 기준으로 찾아 저장소 밖에서 MODULE_NOT_FOUND가 나는 것을 발견해 `--tsconfig` 플래그를 호출 규약에 추가하고 ARCHITECTURE.md 'CLI 호출 규약'에 반영했다. npm run test:e2e로 공유 엔진 변경(revision-moved 제거·no-signal 필드·survey-rules 모듈 import)의 웹 회귀 없음도 확인했다.",
+      "completed_at": "2026-07-29T06:37:19+0900"
+    }
+  ],
+  "created_at": "2026-07-28T20:38:45+0900",
+  "final_verify": {
+    "status": "passed",
+    "exit_code": 0,
+    "at": "2026-07-29T06:38:08+0900",
+    "duration_sec": 48
+  },
+  "completed_at": "2026-07-29T06:38:08+0900"
+}
