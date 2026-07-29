@@ -1,6 +1,11 @@
 import { join } from "node:path";
 
-import { surveyRepository, type SurveyResult } from "@/lib/engine/survey";
+import {
+  surveyRepository,
+  type DiscardedEvidence,
+  type DiscardedSurveyCandidate,
+  type SurveyResult,
+} from "@/lib/engine/survey";
 import { loadSurveyRules, SurveyRulesError } from "@/lib/engine/survey-rules";
 import { AnthropicProposerConfigurationError } from "@/services/proposer-anthropic";
 import { configuredSurveyProposer } from "@/services/survey-proposer";
@@ -58,6 +63,30 @@ function describeCandidates(
   );
 }
 
+function describeDiscarded(
+  evidence: DiscardedEvidence[],
+  candidates: DiscardedSurveyCandidate[],
+): string[] {
+  const lines: string[] = [];
+  if (evidence.length > 0) {
+    lines.push(
+      `Discarded ${evidence.length} evidence path(s):`,
+      ...evidence.map(
+        (item) => `  - ${item.candidateId}:${item.path} (${item.reason})`,
+      ),
+    );
+  }
+  if (candidates.length > 0) {
+    lines.push(
+      `Discarded ${candidates.length} candidate(s):`,
+      ...candidates.map(
+        (item) => `  - ${item.candidateId} (${item.reason}): ${item.detail}`,
+      ),
+    );
+  }
+  return lines;
+}
+
 function artifactPath(runId: string, root: string | undefined): string {
   return join(runDir(runId, root), "survey.json");
 }
@@ -88,7 +117,9 @@ export async function runSurveyCommand(
     };
   }
 
-  const runId = createRun(repository, root);
+  // The run directory is created only after SURVEY returns. If the proposer
+  // throws (network or response failure) the command exits 3 with no run at
+  // all — an empty run directory would read as "ran but produced nothing".
   const result = await surveyRepository(
     repository,
     proposer,
@@ -96,6 +127,7 @@ export async function runSurveyCommand(
     sourceRoot(root),
   );
 
+  const runId = createRun(repository, root);
   writeSurveyArtifact(runId, toSurveyArtifact(result), root);
   writeCurrentRun(runId, root);
 
@@ -106,6 +138,7 @@ export async function runSurveyCommand(
       `Surveyed ${result.repository} at ${result.revision} (run ${runId}).`,
       `${result.candidates.length} candidate(s):`,
       ...describeCandidates(result.candidates),
+      ...describeDiscarded(result.discardedEvidence, result.discardedCandidates),
       `Recorded ${path}.`,
       "Next: uptake author --candidate <id>",
     ];
