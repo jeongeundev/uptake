@@ -95,6 +95,8 @@ uptake author --candidate <id> → runs/<current>/authoring.json  (성공 시 pa
 
 **phase 4가 건드릴 기존 계약 하나** — `survey-adopt.ts:129-136`의 `revision-moved` 분기와 `AdoptResult`의 해당 reason, 그리고 `survey-adopt.test.ts:173`의 테스트를 제거·교체한다. `resolveSources`(`extract.ts:111`)가 조건 없이 `rev-parse HEAD`를 다시 읽는 것이 원인이며, 이는 "고정 revision에서만 읽는다"는 자기 계약 위반이다. 직접 저작 경로(`extractEvidence`)는 건드리지 않는다.
 
+**phase 5가 층 1 재검증을 걸 때 파일명을 합성해야 한다 (2026-07-29 · phase 4 구현 후 확인).** `validatePatternValue(value, filename, sourceRoot)`의 `filename`에 `"authoring.json"`을 그대로 넘기면 `load.ts:100`의 `basename(filename, extname(filename)) !== value.patternId`가 `schema-invalid`로 거부하고 조기 리턴한다 — `validateReferences`·`validateEvidence`·`validateProvenance`에 **도달하지 못한다.** 이 검사는 카탈로그 파일명 규약(`catalog/<patternId>.json`)을 강제하는 것이고 `filename`은 산출물의 일부가 아니라 호출자가 주는 인자이므로, `verify`는 `${pattern.patternId}.json`을 합성해 넘겨야 네 층이 전부 돈다. ADR-025의 "그대로 먹는 형태"는 값(`authoring.json`의 `pattern`)에 대한 의무이지 파일명이 아니다. 같은 설명이 `src/__tests__/workflow-relay.integration.test.ts`의 주석에도 있다.
+
 ### 착수 전 감사가 확정한 것 (2026-07-28 · 전부 정본에 반영됨)
 
 phase 4·5 방향을 문서에 물질화한 뒤, 착수 전에 변경된 문서만 대상으로 적대적 검토를 한 번 더 돌렸다. 여덟 건이 나왔고 결과적으로 **phase 4가 상당히 얇아졌다.**
