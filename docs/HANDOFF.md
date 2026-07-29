@@ -1,35 +1,37 @@
-# HANDOFF — phase 3 완료 / phase 4·5 방향 확정, 구현 미착수
+# HANDOFF — phase 4 완료 / phase 5 착수 전
 
 > 이 문서는 새 세션이 현재 저장소 상태를 오해하지 않고 이어가기 위한 실행 계약이다. 이미 정본에 있는 요구사항·아키텍처·결정 상세를 반복하지 않고 경로로 참조한다.
 >
-> 기준 시각: 2026-07-28
-> 현재 브랜치: `feat-4-workflow-relay` (PR #9 phase 3 · PR #10 하네스 개편 머지 완료)
+> 기준 시각: 2026-07-29
+> 현재 브랜치: `main` (PR #13 phase 4 · PR #14 리뷰 후속 수정 · PR #15 phase 5 메모 머지 완료)
 
 ## 1. 새 세션이 할 일
 
-**phase 3까지 구현됐다. phase 4·5의 방향은 확정됐고 구현은 시작되지 않았다.**
+**phase 4까지 구현됐다. 워크플로우 릴레이가 디스크 위에 서 있고, 배포된 명령은 `init` · `survey` · `author` 셋이다.**
 
-방향 확정의 정본은 `docs/PRD.md`의 'Phase 4 범위'·'Phase 5 범위' 절과 ADR-020~025다. 4절이 그 요약과 착수 순서를 적어둔 곳이다. **다음 단계는 `$harness`로 phase 4의 step을 설계하는 것**이며, 방향을 다시 열지 마라 — 이미 `$grilling` 성격의 압박을 두 번(방향 확정 시, **착수 전 감사** 시 · 4절) 거쳐 문서에 물질화됐다. 감사는 phase 4를 **얇게 만드는 쪽으로만** 작동했다 — 등재·설정 파일·실행 원장·초안 파일·자산 경로 2건이 빠졌고 새로 들어온 기능은 없다.
+**다음 단계는 `$harness`로 phase 5의 step을 설계하는 것**이다(`verify` · `apply`). 방향의 정본은 `docs/PRD.md`의 'Phase 5 범위' 절과 ADR-020~025이며, 방향을 다시 열지 마라 — 이미 `$grilling` 성격의 압박을 두 번(방향 확정 시, **착수 전 감사** 시 · 4절) 거쳐 문서에 물질화됐다.
 
-**미해소 리스크가 하나 있다 (3절 말미).** phase 3은 유효한 독립 리뷰를 받지 않은 채 main에 있다.
+**phase 5 착수 전에 반드시 읽을 것이 4절에 하나 있다** — `verify`가 층 1 재검증을 걸 때 `validatePatternValue`에 넘길 파일명을 합성해야 한다는 사실. 모르고 들어가면 provenance 재검증이 돌지 않는 채로 "통과"를 보게 된다.
 
-**phase 3 구현 감사에서 확인된 사실 (2026-07-28, 실측):** 유닛 260건·브라우저 E2E 4건·파이썬 99건 통과, lint 0건, 빌드 성공. 그러나 **fresh clone에서는 유닛 259건 통과 + 1건 skip**이며, skip되는 것이 씨앗 카탈로그 로드 테스트다(`catalog/spec-change-declaration-gate.test.ts:76-82`). `.uptake/sources/`가 없으면 `loadCatalog`가 씨앗 패턴을 `provenance-unresolved`로 거부해 **이식 화면이 빈 상태로 열린다.** 즉 "테스트 전부 초록"이 "제품이 동작함"을 뜻하지 않는다.
+**미해소 리스크가 하나 있다 (3절 말미).** phase 3은 유효한 독립 리뷰를 받지 않은 채 main에 있다. phase 4는 리뷰를 받았다.
 
-**콜드 스타트는 `uptake init`이 해소하지 않는다.** `init`은 네트워크에 나가지 않으므로(PRD 'Phase 4 범위') 씨앗 저장소(backend.ai · pytest)를 받아올 수 없다. 근거가 없으면 거부하는 것이 정상 동작이며(ADR-009), `init`이 하는 일은 `METHOD.md`에 무엇을 왜 받아야 하는지 적어두는 것까지다. 씨앗을 자동으로 갖추는 방법은 별도 결정이 필요하고 phase 4 범위가 아니다.
+**"테스트 전부 초록"이 "제품이 동작함"을 뜻하지 않는다.** 씨앗 카탈로그 로드 테스트는 `.uptake/sources/`에 씨앗 저장소(backend.ai · pytest)가 **둘 다 있을 때만** 돌고 없으면 조용히 skip된다(`catalog/spec-change-declaration-gate.test.ts`의 `repositoriesPresent ? it : it.skip`). fresh clone에서는 유닛 1건이 그렇게 빠지며, 같은 조건에서 `loadCatalog`가 씨앗 패턴을 `provenance-unresolved`로 거부해 **이식 화면이 빈 상태로 열린다.** 2026-07-28 phase 3 감사에서 확인됐고 조건은 지금도 그대로다.
+
+**콜드 스타트는 `uptake init`이 해소하지 않는다.** `init`은 네트워크에 나가지 않으므로(PRD 'Phase 4 범위') 씨앗 저장소(backend.ai · pytest)를 받아올 수 없다. 근거가 없으면 거부하는 것이 정상 동작이며(ADR-009), `init`이 하는 일은 `METHOD.md`에 무엇을 왜 받아야 하는지 적어두는 것까지다. 씨앗을 자동으로 갖추는 방법은 별도 결정이 필요하며 phase 4·5 어느 쪽 범위도 아니다 — 여전히 미해소다.
 
 ## 2. 현재 판정
 
-phase 0(엔진 INSTANTIATE·VERIFY) · phase 1(UI/API/E2E) · phase 2(저작 파이프라인) · phase 3(SURVEY) 모두 완료.
+phase 0(엔진 INSTANTIATE·VERIFY) · phase 1(UI/API/E2E) · phase 2(저작 파이프라인) · phase 3(SURVEY) · phase 4(워크플로우 릴레이) 모두 완료.
 
-검증 상태 (2026-07-27, `main` = `5c80c2f` 기준 실측):
+검증 상태 (2026-07-29, `main` = `a464aaf` 기준 실측):
 
 | 검증 | 결과 |
 |---|---|
-| `npm test` | 260 passed / 41 files |
+| `npm test` | 335 passed / 49 files |
 | `npm run lint` | clean |
 | `npm run build` | 성공 |
-| `python3 -m pytest scripts/` | 99 passed |
-| `npm run test:e2e` | 기본 3 passed + unresolved 1 passed |
+| `python3 -m pytest scripts/` | 117 passed |
+| `bash scripts/final-verify.sh` | exit 0 — 기본 3 passed + unresolved 1 passed |
 
 ## 3. phase 3 결과 — SURVEY가 제품 루트가 됐다
 
@@ -68,9 +70,9 @@ $review 8c5062c
 
 같은 사고가 재발하지 않도록 실행기가 `--disable-slash-commands`로 step 세션의 스킬 호출 능력을 제거했다(5절).
 
-## 4. phase 4·5 — 방향 확정 (구현 미착수)
+## 4. phase 4 완료 / phase 5 착수 전
 
-정본은 `docs/PRD.md`의 'Phase 4 범위'·'Phase 5 범위' 절과 ADR-020~025다. 요지: **기능을 늘리지 않고, 이미 있는 세 기능을 다섯 단계 명령과 디스크 산출물로 물질화한다.**
+정본은 `docs/PRD.md`의 'Phase 4 범위'·'Phase 5 범위' 절과 ADR-020~025다. 요지: **기능을 늘리지 않고, 이미 있는 세 기능을 다섯 단계 명령과 디스크 산출물로 물질화한다.** phase 4가 앞의 셋(`init`·`survey`·`author`)을 물질화했고, phase 5가 나머지 둘(`verify`·`apply`)을 남겨두고 있다.
 
 ```
 uptake init → uptake survey → uptake author → uptake verify → uptake apply
@@ -79,11 +81,11 @@ uptake init → uptake survey → uptake author → uptake verify → uptake app
 
 phase 3까지의 문제는 기능 부재가 아니라 **릴레이 부재**였다 — 세 위저드가 서로를 모르고, 인메모리 상태라 프로세스가 죽으면 사라지며, 중간 상태를 사람이 읽거나 리뷰할 수 없었다. 참고 선례는 Spec Kit이고, 가져오는 것은 "방법론을 원칙 → 단계별 명령 → 단계별 산출물 → 릴레이 → 단계 사이 게이트 → 적용의 실행 가능한 워크플로우로 배포한다"는 형식이다(ADR-020).
 
-**착수 순서 — phase 4와 5를 분리한다.** 총 작업량은 같으나 phase마다 엔진 변경이 **1건씩**으로 갈리고, 첫 증명이 빨라지며, step 수가 적어 `stop-verify` 세션당 1회 차단 문제(6절 말미)에 덜 노출된다.
+**착수 순서 — phase 4와 5를 분리했다.** 총 작업량은 같으나 phase마다 엔진 변경이 **1건씩**으로 갈리고, 첫 증명이 빨라지며, step 수가 적어 `stop-verify` 세션당 1회 차단 문제(6절 말미)에 덜 노출된다.
 
 | | 범위 | 엔진 변경 | 증명할 것 |
 |---|---|---|---|
-| **phase 4** | `init` · `survey` · `author`(채택 경로만, 등재 없음) | `extractFromCandidates`가 고정 revision을 받고 `revision-moved` 제거 (ADR-021) · `no-signal`에 revision 추가 · `survey-rules` 모듈 import · `templates` 설치 위치 해석 (ADR-024) | `init`→`survey`→**프로세스 종료**→`author`가 디스크에서 이어받는다 (uptake 저장소 밖에서) |
+| **phase 4** ✅ | `init` · `survey` · `author`(채택 경로만, 등재 없음) | `extractFromCandidates`가 고정 revision을 받고 `revision-moved` 제거 (ADR-021) · `no-signal`에 revision 추가 · `survey-rules` 모듈 import · `templates` 설치 위치 해석 (ADR-024) | 증명됨 — `init`→`survey`→**프로세스 종료**→`author`가 디스크에서 이어받는다 (uptake 저장소 밖 cwd에서, 별개 `tsx` 자식 프로세스로) |
 | **phase 5** | `verify` · `apply` | `applyGenerated` 순수화 + `bindingsHash` (ADR-022) · 소비 시점 층 1 재검증 (ADR-025) | 5단계 관통, 대화형 승인, 재적용 차단 |
 
 ```
@@ -93,7 +95,19 @@ uptake survey <repository>     → runs/NNN-<slug>/survey.json · runs/current
 uptake author --candidate <id> → runs/<current>/authoring.json  (성공 시 pattern 포함)
 ```
 
-**phase 4가 건드릴 기존 계약 하나** — `survey-adopt.ts:129-136`의 `revision-moved` 분기와 `AdoptResult`의 해당 reason, 그리고 `survey-adopt.test.ts:173`의 테스트를 제거·교체한다. `resolveSources`(`extract.ts:111`)가 조건 없이 `rev-parse HEAD`를 다시 읽는 것이 원인이며, 이는 "고정 revision에서만 읽는다"는 자기 계약 위반이다. 직접 저작 경로(`extractEvidence`)는 건드리지 않는다.
+**phase 4가 건드린 기존 계약 하나 (완료)** — `revision-moved` 분기와 `AdoptResult`의 해당 reason, 그 테스트를 제거했다. `resolveSources`가 조건 없이 `rev-parse HEAD`를 다시 읽는 것이 원인이었고, 이는 "고정 revision에서만 읽는다"는 자기 계약 위반이었다(ADR-021). 직접 저작 경로(`extractEvidence`)는 종전대로 저작 개시 시점에 고정한다 — 두 경로의 고정 시점이 다른 것은 정상이다.
+
+### phase 4 리뷰 결과 (2026-07-29 · 독립 세션 1회)
+
+두 축을 다 돌렸다 — 범용은 내장 `/code-review`, uptake 고유 축은 `$review`. **판정 Approve**(critical 0 · major 0). 제기된 17건 중 **9건이 반박 검증에서 기각**됐고, 확인된 6건은 PR #14에서 고쳤다.
+
+**기각된 것을 다시 올리지 마라.** 근거를 대고 폐기한 건들이며, 재검증은 같은 결론에 도달하면서 비용만 쓴다.
+
+- **CLI 호출 규약 "자기모순"** — `docs/ARCHITECTURE.md`의 `--tsconfig` 문단은 바로 앞 문단을 조건부로 한정하는 **인접 문단**이다. `AGENTS.md`가 `--tsconfig` 없는 형태만 싣는 것도 그 파일이 저장소 **내부** 가이드라서이고(cwd에 tsconfig가 있다) 오류가 아니다.
+- **`validatePatternValue`가 `"authoring.json"`을 못 먹는다** — AC 오인용이다. `step6.md`가 "의무는 형태이지 검사가 아니다"라고 못박았고, 리터럴대로 호출하면 오히려 게이트에 닿지 못한다(바로 아래 메모가 그 이유다).
+- **`paths.ts`의 순번 재사용 → 앞 run 덮어쓰기** — 도달 조건이 사실상 성립하지 않는다(`mkdirSync`가 먼저 던진다).
+- **`extract.ts`의 `js/ts` 근거 경로 누락** — main에 이미 있던 코드이고, 산출물은 `targetStackFacts`와 `sources[].stack`을 나란히 실어 근거를 오히려 드러낸다.
+- **METHOD.md의 예시 저장소 식별자·"정상 동작" 문구** — 전자는 "예:"로 명시된 경로 모양 예시이고, 후자는 ADR-006이 규율하는 *패턴 서술*의 태도가 아니라 도구가 자기 게이트를 설명하는 문장이다.
 
 **phase 5가 층 1 재검증을 걸 때 파일명을 합성해야 한다 (2026-07-29 · phase 4 구현 후 확인).** `validatePatternValue(value, filename, sourceRoot)`의 `filename`에 `"authoring.json"`을 그대로 넘기면 `load.ts:100`의 `basename(filename, extname(filename)) !== value.patternId`가 `schema-invalid`로 거부하고 조기 리턴한다 — `validateReferences`·`validateEvidence`·`validateProvenance`에 **도달하지 못한다.** 이 검사는 카탈로그 파일명 규약(`catalog/<patternId>.json`)을 강제하는 것이고 `filename`은 산출물의 일부가 아니라 호출자가 주는 인자이므로, `verify`는 `${pattern.patternId}.json`을 합성해 넘겨야 네 층이 전부 돈다. ADR-025의 "그대로 먹는 형태"는 값(`authoring.json`의 `pattern`)에 대한 의무이지 파일명이 아니다. 같은 설명이 `src/__tests__/workflow-relay.integration.test.ts`의 주석에도 있다.
 
@@ -111,9 +125,9 @@ phase 4·5 방향을 문서에 물질화한 뒤, 착수 전에 변경된 문서�
 - **미구현 단계의 표현을 정했다.** `METHOD.md`는 다섯 단계를 다 적되 현재 배포된 명령을 밝히고, **CLI는 `verify`·`apply`라는 이름을 알지 않는다** — unknown 명령은 명령 목록 출력 + `exit 2`. `exit 2`의 정의를 "지금 이 명령을 실행할 수 없다 + 대신 무엇을 할지 알려준다"로 넓혔다(순서 위반은 그 특수형).
 - **CLI 진입은 `bin/uptake.ts`** — `.mts`는 tsconfig의 `include`(`**/*.ts`)에 걸리지 않아 `npm run build` 타입체크 밖이다(실측: `tsc --listFiles`에 프로젝트 `.mts` 0건, 기존 `evals/proposer.eval.mts`도 빠져 있다). `.mts`로 만들면 CLI 전체가 게이트 없이 green이 된다. 호출 규약은 `npx tsx bin/uptake.ts <command>` — `@/` 별칭·JSON 모듈 import 모두 동작을 실측했다.
 
-**phase 4는 웹 코드를 건드리지 않지만 웹 동작은 바꾼다.** 세 변경이 전부 공유 엔진이다 — `revision-moved` 제거(웹 채택 라우트가 같은 `adoptSurveyCandidate`를 쓴다) · `no-signal` 필드 추가(`SurveyError`가 웹 API 응답 타입이다) · 수집 규칙 로딩 방식(`survey-service.ts:87`). 그런데 **`stop-verify` 게이트는 `npm run test:e2e`를 돌리지 않는다**(`lint`·`build`·`test`뿐). 웹 SURVEY 흐름을 덮는 `e2e/survey.spec.ts`가 깨져도 게이트는 모른다. 그래서 웹 회귀를 PRD의 수용 기준으로 명시했다 — 게이트가 안 도는 검사는 AC로 적어두지 않으면 실행되지 않는다.
+**엔진을 건드리면 웹 코드를 건드리지 않아도 웹 동작이 바뀐다 — phase 5도 같다.** phase 4의 변경 셋이 전부 공유 엔진이었다 — `revision-moved` 제거(웹 채택 라우트가 같은 `adoptSurveyCandidate`를 쓴다) · `no-signal` 필드 추가(`SurveyError`가 웹 API 응답 타입이다) · 수집 규칙 로딩 방식(`survey-service.ts`). 그런데 **`stop-verify` 게이트는 `npm run test:e2e`를 돌리지 않는다**(`lint`·`build`·`test`뿐). 웹 SURVEY 흐름을 덮는 `e2e/survey.spec.ts`가 깨져도 step 게이트는 모르고 phase 게이트에서야 잡힌다. phase 4는 웹 회귀를 PRD 수용 기준으로 명시해 통과시켰다(2026-07-29 실측: 기본 3 passed + unresolved 1 passed). phase 5의 엔진 변경(`applyGenerated` 순수화 + `bindingsHash`)도 같은 위험을 지므로 같은 방식으로 AC에 적어라 — 게이트가 안 도는 검사는 AC로 적어두지 않으면 실행되지 않는다.
 
-**보류된 후보** (phase 4·5 이후 재검토):
+**보류된 후보** (phase 5 이후 재검토):
 
 - **카탈로그 확충** — 실물이 씨앗 1건뿐이다(`catalog/spec-change-declaration-gate.json`). 워크플로우가 서면 채우는 노동 자체가 재현 가능해지므로 순서를 뒤로 뒀다.
 - **SURVEY 신뢰도 보강** — 3절 "남아 있는 미검증" 항목. 실측으로 확인된 것 하나: pytest 저장소에서 수집 예산의 **50.1%가 `doc/en/announce/release-*.rst`에 쓰였고 design-docs 212건이 budget-exhausted로 탈락**했다. 라운드로빈이 카테고리를 교대시키지만 **카테고리별 상한이 없어** 작은 카테고리가 소진되면 가장 큰 카테고리가 남은 예산을 흡수한다. 핵심 신호(hooks·ci·agent-instructions)가 굶지는 않았으나 프롬프트 절반이 노이즈다. **데이터 변경만으로는 해소되지 않는다** — `survey-rules.ts:76`이 rule을 `hasExactKeys(["id","include"])`로, `:104`가 top-level을 exact key로 검사해 미지의 키를 던지므로, 카테고리별 상한은 타입·파서·수집기·테스트를 함께 고치는 코드 변경이다.
@@ -135,12 +149,19 @@ phase 4·5 방향을 문서에 물질화한 뒤, 착수 전에 변경된 문서�
 
 [저작]  소스 repo ≥1 + intent → 파일 후보 제안(LLM) → provenance resolve 폐기 → 대조(공통=role/차이=binding)
         → corroboration 계산·강등 → oracle 초안 + 자기검증 → 초안 검토 → 승인 → 스테이징 검증 후 원자적 등재
+
+[워크플로우 · CLI] uptake init                    → .uptake/METHOD.md (멱등, 네트워크 없음)
+                   uptake survey <repository>     → runs/NNN-<slug>/survey.json · runs/current (HEAD 고정)
+                   uptake author --candidate <id> → runs/<current>/authoring.json (성공 시 pattern)
+                   단계 사이는 프로세스가 끊기고 디스크로만 이어진다. verify·apply는 phase 5.
 ```
 
 핵심 위치:
 
 | 대상 | 경로 | 비고 |
 |---|---|---|
+| CLI 워크플로우 | `bin/uptake.ts` · `src/workflow/` | 릴레이의 **정본**(ADR-020) — 웹은 두 번째 표면. 단계를 웹 클라이언트 상태로 잇지 마라 |
+| 워크플로우 통합 테스트 | `src/__tests__/workflow-relay.integration.test.ts` | 저장소 밖 cwd에서 별개 프로세스로 관통 — 모킹으로 대체하지 마라 |
 | SURVEY 수집 규칙 | `survey-rules.json` · `src/lib/engine/survey-rules.ts` | **데이터다. 코드에 박지 마라**(ADR-018) |
 | SURVEY 엔진 | `src/lib/engine/survey-collect.ts`, `survey.ts`, `survey-adopt.ts` | 고정 revision의 수집 파일만 근거로 허용 |
 | SURVEY 서비스 | `src/services/survey-service.ts`, `survey-store.ts` | 세션 결속 저장소 |
