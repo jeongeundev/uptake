@@ -1,5 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -7,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createStubSurveyProposer } from "@/services/proposer-stub";
 import { __setSurveyProposerForTests } from "@/services/survey-proposer";
 import { readSurveyArtifact } from "@/workflow/artifacts";
-import { readCurrentRun } from "@/workflow/paths";
+import { readCurrentRun, runsDir } from "@/workflow/paths";
 import { runSurveyCommand } from "@/workflow/steps/survey";
 import type { SurveyCandidate } from "@/types/survey";
 
@@ -143,6 +149,45 @@ describe("runSurveyCommand", () => {
       repository: "example/one",
       discardedCandidates: [{ candidateId: candidate.id, reason: "no-evidence" }],
     });
+  });
+
+  it("reports discarded evidence and candidates in the success output", async () => {
+    createRepository("example/one", {
+      "AGENTS.md": "Changes require review.\n",
+    });
+    __setSurveyProposerForTests(
+      createStubSurveyProposer({
+        candidates: [
+          { ...candidate, evidence: ["AGENTS.md", "invented.md"] },
+          { ...candidate, id: "ghost", evidence: ["nowhere.md"] },
+        ],
+      }),
+    );
+
+    const result = await runSurveyCommand("example/one", root);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.message).toContain("invented.md");
+    expect(result.message).toContain("not-collected");
+    expect(result.message).toContain("ghost");
+    expect(result.message).toContain("no-evidence");
+  });
+
+  it("does not leave a run directory behind when the proposer throws", async () => {
+    createRepository("example/one", {
+      "AGENTS.md": "Changes require review.\n",
+    });
+    __setSurveyProposerForTests({
+      metadata: { providerId: "test", modelId: "test" },
+      proposeSurveyCandidates: () =>
+        Promise.reject(new Error("proposer exploded")),
+    });
+
+    await expect(runSurveyCommand("example/one", root)).rejects.toThrow(
+      "proposer exploded",
+    );
+
+    expect(existsSync(runsDir(root))).toBe(false);
   });
 
   it("records no-signal with the pinned revision and exits 1 when no file matches a rule", async () => {

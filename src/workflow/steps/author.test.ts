@@ -225,6 +225,9 @@ describe("runAuthorCommand", () => {
     expect(artifact).toMatchObject({
       status: "provenance-unresolvable",
       candidateId: candidate.id,
+      discarded: [
+        { path: "missing-file.md", reason: "provenance-unresolved" },
+      ],
     });
     expect(existsSync(join(root, "catalog"))).toBe(false);
   });

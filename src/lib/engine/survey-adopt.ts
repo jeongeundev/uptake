@@ -34,6 +34,10 @@ export type AdoptResult =
         | "extract-failed"
         | "assembly-invalid";
       detail: string;
+      // Which path was dropped and why. detail only carries the set of reason
+      // kinds, so without this the failure artifact cannot say what was
+      // discarded — the success artifact already records it.
+      discarded?: DiscardedCandidate[];
     };
 
 function deriveSourceId(repository: string): string | undefined {
@@ -65,12 +69,14 @@ function extractionFailure(
       ok: false,
       reason: "provenance-unresolvable",
       detail: result.detail,
+      discarded: result.discarded,
     };
   }
   return {
     ok: false,
     reason: "extract-failed",
     detail: result.detail,
+    ...(result.reason === "no-evidence" ? { discarded: result.discarded } : {}),
   };
 }
 
