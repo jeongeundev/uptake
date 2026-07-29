@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createStubProposer } from "@/services/proposer-stub";
 import type { AuthoringRequest } from "@/types/authoring";
 
-import { extractEvidence } from "./extract";
+import { extractEvidence, GitUnavailableError } from "./extract";
 
 const fixtureRoots: string[] = [];
 
@@ -198,6 +198,29 @@ describe("extractEvidence", () => {
       reason: "revision-unresolvable",
     });
     expect(proposer.calls.fileCandidates).toHaveLength(0);
+  });
+
+  it("throws instead of reporting revision-unresolvable when git cannot be run", async () => {
+    const sourceRoot = createSourceRoot();
+    createRepository(sourceRoot, "github.com/example/source", {
+      "method.md": "observed method\n",
+    });
+    const pinnedRequest = request();
+    pinnedRequest.sources[0] = {
+      ...pinnedRequest.sources[0],
+      revision: "0".repeat(40),
+    };
+    const proposer = createStubProposer({});
+
+    const previousPath = process.env.PATH;
+    process.env.PATH = join(sourceRoot, "no-binaries-here");
+    try {
+      await expect(
+        extractEvidence(pinnedRequest, proposer, sourceRoot),
+      ).rejects.toThrow(GitUnavailableError);
+    } finally {
+      process.env.PATH = previousPath;
+    }
   });
 
   it("discards a proposed path that does not exist at the pinned revision", async () => {

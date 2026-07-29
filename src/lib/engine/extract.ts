@@ -48,6 +48,26 @@ type ResolvedSource = {
   files: string[];
 };
 
+export class GitUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GitUnavailableError";
+  }
+}
+
+// git exiting non-zero is an answer about the repository (unknown revision,
+// missing path) and stays a gate result. Failing to start git at all — or
+// losing it to a signal — is an infrastructure error and must not be counted
+// as one (ADR-008): it would surface as revision-unresolvable, which tells the
+// user to fix their clone.
+function gitAnswered(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    typeof (error as { status?: unknown }).status === "number"
+  );
+}
+
 function gitOutput(repositoryRoot: string, args: string[]): string | undefined {
   try {
     return execFileSync("git", args, {
@@ -55,8 +75,13 @@ function gitOutput(repositoryRoot: string, args: string[]): string | undefined {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
-  } catch {
-    return undefined;
+  } catch (error) {
+    if (gitAnswered(error)) return undefined;
+    throw new GitUnavailableError(
+      `git could not be run in ${repositoryRoot}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
   }
 }
 
