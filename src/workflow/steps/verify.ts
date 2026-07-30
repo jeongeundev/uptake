@@ -255,7 +255,7 @@ export async function runVerifyCommand(
       `Verified pattern "${pattern.patternId}" against ${targetRepoRoot}.`,
       `Gate test: ${instantiated.gateTestId}`,
       `Recorded ${path}.`,
-      "This is the current end of the deployed workflow.",
+      "Next: uptake apply",
     ];
     return { exitCode: 0, message: lines.join("\n") };
   }

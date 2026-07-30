@@ -212,9 +212,7 @@ describe("workflow relay: init -> survey -> author across process boundaries", (
       expect(contentAfterFirst).toContain(
         "init → survey → author → verify → apply",
       );
-      expect(contentAfterFirst).toContain(
-        "현재 배포된 명령은 `init` · `survey` · `author` · `verify`다.",
-      );
+      expect(contentAfterFirst).toContain("다섯 단계가 모두 배포됐다.");
     },
     CLI_TIMEOUT_MS,
   );
@@ -348,17 +346,16 @@ describe("workflow relay: init -> survey -> author across process boundaries", (
   );
 
   it(
-    "rejects commands that are not yet deployed, listing the available ones",
+    "rejects commands that are not known, listing the available ones",
     () => {
-      // "verify" is deployed as of this phase and is exercised in its own
-      // test above; only genuinely unknown/undeployed commands belong here.
-      for (const command of ["apply", "nonexistent"]) {
-        const result = runUptake([command], { cwd: projectRoot, env });
-        expect(result.exitCode).toBe(2);
-        expect(result.stderr).toContain("init");
-        expect(result.stderr).toContain("survey");
-        expect(result.stderr).toContain("author");
-      }
+      // All five commands are deployed as of this phase (apply is exercised
+      // in its own suite — src/workflow/steps/apply.test.ts); only a
+      // genuinely unknown command belongs here.
+      const result = runUptake(["nonexistent"], { cwd: projectRoot, env });
+      expect(result.exitCode).toBe(2);
+      expect(result.stderr).toContain("init");
+      expect(result.stderr).toContain("survey");
+      expect(result.stderr).toContain("author");
     },
     CLI_TIMEOUT_MS,
   );

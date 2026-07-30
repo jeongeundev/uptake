@@ -29,7 +29,10 @@
     {
       "step": 3,
       "name": "cli-apply",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-30T09:32:06+0900",
+      "summary": "src/workflow/steps/apply.ts를 신설해 verify.json이 고정한 해시 3종(contentHash·bindingsHash·targetBaseHash)을 ApprovalInput으로 그대로 넘겨 applyGenerated를 호출하고, applyState의 verificationId 일치로 재적용을 승인 호출 이전에 차단한다(ADR-022 소비 봉인). cli.ts에 apply를 KNOWN_COMMANDS로 추가하고 stdin이 TTY가 아니면 runApplyCommand를 부르지 않고 exit 2로 막았으며, 기본 승인 프롬프트(promptForApproval)는 readline/promises로 파일 전체 내용·frozenArgv·바인딩을 보인 뒤 y/yes만 승인으로 받는다. verify.ts 성공 메시지와 templates/METHOD.md를 다섯 단계 전체 배포로 갱신하고, 이에 따라 무효화된 cli.test.ts·workflow-relay.integration.test.ts의 기존 단언을 새 동작에 맞춰 교체했다.",
+      "completed_at": "2026-07-30T09:52:00+0900"
     },
     {
       "step": 4,

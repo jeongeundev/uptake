@@ -31,11 +31,17 @@ describe("runCli", () => {
     expect(outcome.stderr.join("\n")).toContain("init");
   });
 
-  it("does not know about apply as a command", async () => {
-    const outcome = await runCli(["apply"], root);
+  it("blocks apply without prompting when stdin is not a TTY", async () => {
+    const originalIsTTY = process.stdin.isTTY;
+    process.stdin.isTTY = false;
+    try {
+      const outcome = await runCli(["apply"], root);
 
-    expect(outcome.exitCode).toBe(2);
-    expect(outcome.stderr.join("\n")).toContain("init");
+      expect(outcome.exitCode).toBe(2);
+      expect(outcome.stderr.join("\n")).toContain("TTY");
+    } finally {
+      process.stdin.isTTY = originalIsTTY;
+    }
   });
 
   it("exits 2 with a usage message when verify is missing --target", async () => {
