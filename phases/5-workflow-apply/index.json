@@ -13,7 +13,10 @@
     {
       "step": 1,
       "name": "verify-artifacts",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-30T09:11:52+0900",
+      "summary": "artifacts.ts에 bindings/generated/verify/apply 산출물 읽기·쓰기와 writeRunLog/runLogPath를 추가하고, prerequisites.ts에 authoringState·verifyState·applyState 3-상태 판정을 추가했으며, targetEligibility를 workflow-store.ts에서 src/lib/engine/target.ts로 순수 이동했다.",
+      "completed_at": "2026-07-30T09:20:00+0900"
     },
     {
       "step": 2,
