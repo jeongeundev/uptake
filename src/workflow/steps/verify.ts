@@ -17,9 +17,11 @@ import {
   writeGeneratedArtifact,
   writeRunLog,
   writeVerifyArtifact,
+  type PatternProvenance,
 } from "@/workflow/artifacts";
 import { readCurrentRun, runDir, sourceRoot } from "@/workflow/paths";
 import { authoringState } from "@/workflow/prerequisites";
+import type { Pattern } from "@/types/pattern";
 
 export type VerifyCommandResult = {
   exitCode: 0 | 1 | 2 | 3;
@@ -31,6 +33,21 @@ const RUN_AUTHOR_HINT = "Run `uptake author --candidate <id>` first.";
 
 function artifactPath(runId: string, root: string | undefined): string {
   return join(runDir(runId, root), "verify.json");
+}
+
+// The same sourceId → repository/revision join the web surface renders
+// (catalog-bindings-wizard 'Provenance'). Flattened onto verify.json so that
+// apply can show where the pattern came from without reading the pattern.
+function patternProvenance(pattern: Pattern): PatternProvenance[] {
+  const sources = new Map(pattern.sources.map((source) => [source.id, source]));
+  return pattern.provenance.map((item) => {
+    const source = sources.get(item.sourceId);
+    return {
+      repository: source?.repository ?? item.sourceId,
+      revision: source?.revision ?? "unknown revision",
+      path: item.path,
+    };
+  });
 }
 
 function persistLogs(
@@ -248,6 +265,8 @@ export async function runVerifyCommand(
         positiveTruncated: outcome.positiveTruncated,
         negativePreview: outcome.negativePreview,
         negativeTruncated: outcome.negativeTruncated,
+        tradeoffs: pattern.tradeoffs,
+        provenance: patternProvenance(pattern),
       },
       root,
     );
