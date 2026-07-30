@@ -326,6 +326,14 @@ export async function executeVerification(
         positiveLog: positive.logPath,
       };
     }
+    if (positive.perTest[gateTestId] === undefined) {
+      return {
+        status: "gate-error",
+        detail: `gate test ${gateTestId} was absent from the positive report`,
+        frozenArgv,
+        positiveLog: positive.logPath,
+      };
+    }
     if (positive.perTest[gateTestId] !== "passed") {
       return {
         status: "positive-failed",
