@@ -66,6 +66,17 @@ export const promptForApproval: ApprovalPrompt = async (summary) => {
     `Gate test: ${summary.gateTestId}`,
     `Verified command: ${summary.frozenArgv.join(" ")}`,
     "",
+    // ADR-006: what a successful repo actually does, plus the cost. ADR-009:
+    // the evidence paths behind that claim, at their pinned revisions.
+    "Tradeoffs:",
+    `  ${summary.tradeoffs}`,
+    "",
+    "Observed in:",
+    ...summary.provenance.map(
+      ({ repository, revision, path }) =>
+        `  ${repository} · ${revision} · ${path}`,
+    ),
+    "",
     "Resolved bindings:",
     ...summary.bindings.map((binding) =>
       binding.status === "binding-unresolved"

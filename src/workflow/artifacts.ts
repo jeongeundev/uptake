@@ -74,6 +74,15 @@ export type GeneratedArtifact = {
   gateTestId: string;
 };
 
+// tradeoffs/provenance are copied here by verify, which has already run
+// validatePatternValue on the pattern (ADR-025). apply displays them without
+// re-reading the pattern, so it takes on no new validation obligation.
+export type PatternProvenance = {
+  repository: string;
+  revision: string;
+  path: string;
+};
+
 export type VerifyArtifact =
   | {
       status: "verified";
@@ -89,6 +98,8 @@ export type VerifyArtifact =
       positiveTruncated: boolean;
       negativePreview: string;
       negativeTruncated: boolean;
+      tradeoffs: string;
+      provenance: PatternProvenance[];
     }
   | {
       status:
@@ -274,7 +285,16 @@ function isVerifyArtifactShape(value: unknown): value is VerifyArtifact {
       isString(value.positivePreview) &&
       isBoolean(value.positiveTruncated) &&
       isString(value.negativePreview) &&
-      isBoolean(value.negativeTruncated)
+      isBoolean(value.negativeTruncated) &&
+      isString(value.tradeoffs) &&
+      Array.isArray(value.provenance) &&
+      value.provenance.every(
+        (item) =>
+          isRecord(item) &&
+          isString(item.repository) &&
+          isString(item.revision) &&
+          isString(item.path),
+      )
     );
   }
 

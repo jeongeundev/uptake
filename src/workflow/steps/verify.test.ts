@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AuthoringArtifact } from "@/workflow/artifacts";
 import {
@@ -19,8 +19,19 @@ import {
   writeAuthoringArtifact,
 } from "@/workflow/artifacts";
 import { createRun, writeCurrentRun } from "@/workflow/paths";
+import { runGate } from "@/services/gate-runner";
 import { runVerifyCommand } from "@/workflow/steps/verify";
 import type { Pattern } from "@/types/pattern";
+
+// 기본값은 원본 위임이라 성공 경로 테스트는 계속 실제 게이트를 돈다.
+// 인프라 실패는 실제로 재현할 수 없으므로 그 분기에서만 주입한다.
+vi.mock("@/services/gate-runner", async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import("@/services/gate-runner")>();
+  return { ...original, runGate: vi.fn(original.runGate) };
+});
+
+const mockedRunGate = vi.mocked(runGate);
 
 let root: string;
 let sources: string;
@@ -362,6 +373,70 @@ describe("runVerifyCommand — success path", () => {
 
       expect(existsSync(runLogPath(runId, "positive", root))).toBe(true);
       expect(existsSync(runLogPath(runId, "negative", root))).toBe(true);
+    } finally {
+      rmSync(target, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+
+describe("runVerifyCommand — gate failure exit codes", () => {
+  function ran(
+    status: "passed" | "failed",
+    logPath: string,
+  ): Awaited<ReturnType<typeof runGate>> {
+    return {
+      kind: "ran",
+      perTest: { "declared-change-present": status },
+      logPath,
+      outputPreview: `${status} output`,
+      outputTruncated: false,
+    };
+  }
+
+  it.each([
+    ["reporter parse failed", "gate-error"],
+    ["timeout after 30000ms", "timeout"],
+  ] as const)(
+    "exits 3 for %s instead of counting it as a caught violation",
+    async (detail, status) => {
+      const pattern = buildGenerativePattern();
+      const runId = setUpRun(pattern);
+      const target = createExecutableTarget();
+      mockedRunGate.mockResolvedValueOnce({
+        kind: "error",
+        detail,
+        logPath: "/logs/error.log",
+        outputPreview: detail,
+        outputTruncated: false,
+      });
+
+      try {
+        const result = await runVerifyCommand(target, root);
+
+        expect(result.exitCode).toBe(3);
+        expect(readVerifyArtifact(runId, root)).toMatchObject({ status });
+      } finally {
+        rmSync(target, { recursive: true, force: true });
+      }
+    },
+    30_000,
+  );
+
+  it("exits 1 when the injected violation stays green", async () => {
+    const pattern = buildGenerativePattern();
+    const runId = setUpRun(pattern);
+    const target = createExecutableTarget();
+    mockedRunGate
+      .mockResolvedValueOnce(ran("passed", "/logs/positive.log"))
+      .mockResolvedValueOnce(ran("passed", "/logs/negative.log"));
+
+    try {
+      const result = await runVerifyCommand(target, root);
+
+      expect(result.exitCode).toBe(1);
+      expect(readVerifyArtifact(runId, root)).toMatchObject({
+        status: "negative-not-caught",
+      });
     } finally {
       rmSync(target, { recursive: true, force: true });
     }

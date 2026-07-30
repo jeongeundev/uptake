@@ -195,6 +195,14 @@ const verified: VerifyArtifact = {
   positiveTruncated: false,
   negativePreview: "negative output",
   negativeTruncated: false,
+  tradeoffs: "Costs a review gate on every change.",
+  provenance: [
+    {
+      repository: "github.com/example/seed",
+      revision: "0".repeat(40),
+      path: "changes/12359.feature.md",
+    },
+  ],
 };
 
 const patternInvalid: VerifyArtifact = {

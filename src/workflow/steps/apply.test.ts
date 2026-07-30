@@ -22,7 +22,7 @@ import {
   writeVerifyArtifact,
 } from "@/workflow/artifacts";
 import { createRun, runDir, writeCurrentRun } from "@/workflow/paths";
-import { runApplyCommand } from "@/workflow/steps/apply";
+import { runApplyCommand, type ApprovalPrompt } from "@/workflow/steps/apply";
 
 let root: string;
 let target: string;
@@ -83,6 +83,14 @@ function writeVerificationArtifacts(
     positiveTruncated: false,
     negativePreview: "",
     negativeTruncated: false,
+    tradeoffs: "Costs a review gate on every change.",
+    provenance: [
+      {
+        repository: "github.com/example/seed",
+        revision: "0123456789012345678901234567890123456789",
+        path: "changes/12359.feature.md",
+      },
+    ],
     ...overrides,
   };
   writeVerifyArtifact(runId, verified, root);
@@ -169,6 +177,8 @@ describe("runApplyCommand — prerequisites", () => {
         positiveTruncated: false,
         negativePreview: "",
         negativeTruncated: false,
+        tradeoffs: "Costs a review gate on every change.",
+        provenance: [],
       },
       root,
     );
@@ -212,6 +222,29 @@ describe("runApplyCommand — approval", () => {
       "utf8",
     );
     expect(written).toBe(files[0].content);
+  });
+
+  // ADR-006/009: 승인은 사용자가 자기 저장소에 코드를 쓰겠다고 확정하는
+  // 지점이다. 웹 표면은 같은 지점에서 tradeoffs와 provenance를 보여준다 —
+  // 정본인 CLI가 더 얇으면 안 된다(ADR-020).
+  it("hands the prompt the tradeoffs and provenance verify recorded", async () => {
+    const runId = setUpRun();
+    writeVerificationArtifacts(runId);
+    const confirmSpy = vi.fn<ApprovalPrompt>(async () => false);
+
+    await runApplyCommand({ confirm: confirmSpy, root });
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(confirmSpy.mock.calls[0][0]).toMatchObject({
+      tradeoffs: "Costs a review gate on every change.",
+      provenance: [
+        {
+          repository: "github.com/example/seed",
+          revision: "0123456789012345678901234567890123456789",
+          path: "changes/12359.feature.md",
+        },
+      ],
+    });
   });
 });
 

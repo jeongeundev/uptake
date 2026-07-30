@@ -272,6 +272,17 @@ describe("workflow verify+apply: a generative/corroborated pattern runs the real
       expect(verify.frozenArgv.length).toBeGreaterThan(0);
       expect(verify.gateTestId).toBe("declared-change-present");
 
+      // ADR-006/009: apply의 승인 프롬프트가 근거와 대가를 보이려면 verify가
+      // 그것을 기록해야 한다. 실제 씨앗 패턴으로 sourceId → repository/revision
+      // 조인이 도는지 fixture 밖에서 고정한다.
+      expect(verify.tradeoffs.length).toBeGreaterThan(0);
+      expect(verify.provenance.length).toBeGreaterThan(0);
+      for (const item of verify.provenance) {
+        expect(item.repository).not.toBe("");
+        expect(item.revision).toMatch(/^[0-9a-f]{40}$/);
+        expect(item.path).not.toBe("");
+      }
+
       const generated = readGeneratedArtifact(runId, projectRoot);
       expect(generated?.files.map((file) => file.path).sort()).toEqual([
         "uptake-gate/declared-changes.ts",

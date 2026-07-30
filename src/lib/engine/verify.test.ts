@@ -261,12 +261,25 @@ describe("executeVerification", () => {
     });
   });
 
-  it("requires the oracle test itself to pass in the positive run", async () => {
+  it("treats an oracle absent from the positive report as gate-error, not red", async () => {
     mockedRunGate.mockResolvedValueOnce({
       kind: "ran",
       perTest: { "unrelated-test": "passed" },
       logPath: "/logs/positive.log",
     });
+
+    await expect(
+      executeVerification(prepare()),
+    ).resolves.toMatchObject({
+      status: "gate-error",
+      detail: `gate test ${instantiated.gateTestId} was absent from the positive report`,
+      positiveLog: "/logs/positive.log",
+    });
+    expect(mockedRunGate).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires the oracle test itself to pass in the positive run", async () => {
+    mockedRunGate.mockResolvedValueOnce(ran("failed", "/logs/positive.log"));
 
     await expect(
       executeVerification(prepare()),

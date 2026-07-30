@@ -56,10 +56,10 @@ type ApplyResult =
   | {
       status:
         | "diff-mismatch"
+        | "bindings-mismatch"
         | "apply-failed"
         | "base-changed"
         | "not-approved"
-        | "unknown-approval"
         | "not-verified"
         | "workflow-not-found";
       detail: string;

@@ -7,6 +7,7 @@ import {
   writeApplyArtifact,
   type BindingsArtifact,
   type GeneratedArtifact,
+  type PatternProvenance,
 } from "@/workflow/artifacts";
 import { readCurrentRun } from "@/workflow/paths";
 import { applyState, verifyState } from "@/workflow/prerequisites";
@@ -18,6 +19,8 @@ export type ApprovalSummary = {
   gateTestId: string;
   files: { path: string; role: string; content: string }[];
   bindings: BindingDetection[];
+  tradeoffs: string;
+  provenance: PatternProvenance[];
 };
 
 export type ApprovalPrompt = (summary: ApprovalSummary) => Promise<boolean>;
@@ -114,6 +117,8 @@ export async function runApplyCommand(options: {
     gateTestId: verify.artifact.gateTestId,
     files: generated.files,
     bindings: bindings.bindings,
+    tradeoffs: verify.artifact.tradeoffs,
+    provenance: verify.artifact.provenance,
   };
 
   const approved = await confirm(summary);
