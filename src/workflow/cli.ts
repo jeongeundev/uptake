@@ -1,6 +1,9 @@
+import { isAbsolute } from "node:path";
+
 import { runAuthorCommand } from "@/workflow/steps/author";
 import { runInit } from "@/workflow/steps/init";
 import { runSurveyCommand } from "@/workflow/steps/survey";
+import { runVerifyCommand } from "@/workflow/steps/verify";
 
 export type CliOutcome = {
   exitCode: 0 | 1 | 2 | 3;
@@ -8,7 +11,7 @@ export type CliOutcome = {
   stderr: string[];
 };
 
-const KNOWN_COMMANDS = ["init", "survey", "author"] as const;
+const KNOWN_COMMANDS = ["init", "survey", "author", "verify"] as const;
 type KnownCommand = (typeof KNOWN_COMMANDS)[number];
 
 function isKnownCommand(value: string | undefined): value is KnownCommand {
@@ -28,6 +31,15 @@ function usageLines(): string[] {
 
 function parseCandidateFlag(args: string[]): string | undefined {
   const index = args.indexOf("--candidate");
+  if (index === -1) {
+    return undefined;
+  }
+  const value = args[index + 1];
+  return value === undefined || value === "" ? undefined : value;
+}
+
+function parseTargetFlag(args: string[]): string | undefined {
+  const index = args.indexOf("--target");
   if (index === -1) {
     return undefined;
   }
@@ -71,15 +83,38 @@ async function runKnownCommand(
       : { exitCode: result.exitCode, stdout: [], stderr: lines };
   }
 
-  const candidateId = parseCandidateFlag(args);
-  if (candidateId === undefined) {
+  if (command === "author") {
+    const candidateId = parseCandidateFlag(args);
+    if (candidateId === undefined) {
+      return {
+        exitCode: 2,
+        stdout: [],
+        stderr: ["Usage: uptake author --candidate <id>"],
+      };
+    }
+    const result = await runAuthorCommand(candidateId, root);
+    const lines = result.message.split("\n");
+    return result.exitCode === 0
+      ? { exitCode: 0, stdout: lines, stderr: [] }
+      : { exitCode: result.exitCode, stdout: [], stderr: lines };
+  }
+
+  const target = parseTargetFlag(args);
+  if (target === undefined) {
     return {
       exitCode: 2,
       stdout: [],
-      stderr: ["Usage: uptake author --candidate <id>"],
+      stderr: ["Usage: uptake verify --target <absolute path>"],
     };
   }
-  const result = await runAuthorCommand(candidateId, root);
+  if (!isAbsolute(target)) {
+    return {
+      exitCode: 2,
+      stdout: [],
+      stderr: [`--target must be an absolute path: ${target}`],
+    };
+  }
+  const result = await runVerifyCommand(target, root);
   const lines = result.message.split("\n");
   return result.exitCode === 0
     ? { exitCode: 0, stdout: lines, stderr: [] }

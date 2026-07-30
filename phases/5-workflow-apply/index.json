@@ -21,7 +21,10 @@
     {
       "step": 2,
       "name": "cli-verify",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-30T09:18:58+0900",
+      "summary": "src/workflow/steps/verify.ts를 신설해 authoring.json 소비 직후 validatePatternValue로 층 1을 재검증하고(ADR-025, 파일명은 `${patternId}.json`으로 합성), targetEligibility·detectBindings·instantiate·prepareVerification·executeVerification을 순서대로 걸어 bindings.json·generated.json·verify.json·logs를 기록한다. gate-error/timeout은 exit 3, 나머지 게이트 실패는 exit 1로 분리했다. cli.ts에 verify --target <absolute path>를 배선하고(apply는 여전히 미지의 명령), author.ts 성공 메시지와 templates/METHOD.md의 배포 현황 문구를 갱신했다.",
+      "completed_at": "2026-07-30T09:30:59+0900"
     },
     {
       "step": 3,

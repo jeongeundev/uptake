@@ -98,7 +98,7 @@ export async function runAuthorCommand(
     );
   }
   lines.push(`Recorded ${path}.`);
-  lines.push("This is the current end of the deployed workflow.");
+  lines.push("Next: uptake verify --target <absolute path>");
 
   return { exitCode: 0, message: lines.join("\n") };
 }

@@ -213,7 +213,7 @@ describe("workflow relay: init -> survey -> author across process boundaries", (
         "init → survey → author → verify → apply",
       );
       expect(contentAfterFirst).toContain(
-        "현재 배포된 명령은 `init` · `survey` · `author`다.",
+        "현재 배포된 명령은 `init` · `survey` · `author` · `verify`다.",
       );
     },
     CLI_TIMEOUT_MS,
@@ -350,7 +350,9 @@ describe("workflow relay: init -> survey -> author across process boundaries", (
   it(
     "rejects commands that are not yet deployed, listing the available ones",
     () => {
-      for (const command of ["verify", "apply", "nonexistent"]) {
+      // "verify" is deployed as of this phase and is exercised in its own
+      // test above; only genuinely unknown/undeployed commands belong here.
+      for (const command of ["apply", "nonexistent"]) {
         const result = runUptake([command], { cwd: projectRoot, env });
         expect(result.exitCode).toBe(2);
         expect(result.stderr).toContain("init");
