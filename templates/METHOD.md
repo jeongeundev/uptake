@@ -29,6 +29,8 @@ init → survey → author → verify → apply
 
 **다섯 단계가 모두 배포됐다.** 이 문서는 방법론을 설명하는 것이지 구현 현황을 보고하는 것이 아니므로 체인 전체를 적는다.
 
+단, 명령이 배포된 것과 **한 패턴이 체인을 끝까지 도는 것**은 다른 주장이다. `survey` → `author`로 채택한 패턴은 `descriptive`/`observed`이고 결속점(`bindingPoints`)이 없으므로 `verify`가 `bindings-unresolved`로 멈춘다. `apply`까지 가는 것은 결속점과 판별 오라클을 가진 `generative` 패턴이고, CLI에서 그런 패턴을 만드는 경로(두 번째 소스 대조와 승격)는 아직 없다. 트레이드오프: 채택 경로를 좁게 유지한 대가로 CLI 저작물은 지금 서술까지만 간다.
+
 ## 산출물과 릴레이
 
 각 단계의 상태는 `.uptake/runs/<id>/` 아래의 파일 하나에 산다 (`survey.json`·`authoring.json`). 다음 단계는 인자 없이 `runs/current`가 가리키는 run에서 앞 단계 산출물을 찾는다.

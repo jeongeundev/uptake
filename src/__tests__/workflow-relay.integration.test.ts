@@ -219,6 +219,10 @@ describe("workflow relay: init -> survey -> author across process boundaries", (
         "init → survey → author → verify → apply",
       );
       expect(contentAfterFirst).toContain("다섯 단계가 모두 배포됐다.");
+      // 명령 배포와 "한 패턴이 체인을 끝까지 돈다"는 다른 주장이다. SURVEY
+      // 채택 패턴은 결속점이 없어 verify에서 멈추므로(ADR-006 서술적 태도)
+      // METHOD.md가 그 사실을 숨기지 않는지 고정한다.
+      expect(contentAfterFirst).toContain("bindings-unresolved");
     },
     CLI_TIMEOUT_MS,
   );
