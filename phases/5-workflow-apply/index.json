@@ -1,0 +1,35 @@
+{
+  "project": "uptake",
+  "phase": "5-workflow-apply",
+  "steps": [
+    {
+      "step": 0,
+      "name": "engine-cli-readiness",
+      "status": "completed",
+      "started_at": "2026-07-30T08:44:30+0900",
+      "summary": "applyGenerated를 승인 저장소 어휘 없는 순수 함수(ApprovalInput·bindings 인자)로 바꾸고 bindingsHash 3중 대조를 추가했으며(hashBindings 신설), vitest 바이너리 해석을 cwd 기준에서 설치 위치 기준(process.getBuiltinModule(\"module\").createRequire — 정적 createRequire import는 Next.js 웹팩 빌드가 특수 처리해 무력화되므로 우회)으로 바꾸고, VerifyOutcome 실패 분기에 positiveLog·negativeLog를 실었다. 웹 배선(workflow-store·approval-store)이 새 시그니처를 흡수하도록 갱신했다.",
+      "completed_at": "2026-07-30T09:10:10+0900"
+    },
+    {
+      "step": 1,
+      "name": "verify-artifacts",
+      "status": "pending"
+    },
+    {
+      "step": 2,
+      "name": "cli-verify",
+      "status": "pending"
+    },
+    {
+      "step": 3,
+      "name": "cli-apply",
+      "status": "pending"
+    },
+    {
+      "step": 4,
+      "name": "relay-integration",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-07-30T08:44:30+0900"
+}

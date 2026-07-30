@@ -153,12 +153,13 @@ survey-rules.json       # SURVEY 수집 규칙 (repo에 동봉된 데이터 — 
 | 패키지 동봉 자산 | `survey-rules.json` · 씨앗 `catalog/` · `templates/` · 자기검증 fixture | **설치 위치** |
 | 사용자 상태 | `.uptake/`(`METHOD.md`·`runs/`·`sources/`) | **프로젝트 루트** (실행 시 작업 디렉터리) |
 
-**적용은 그 자산을 실제로 읽는 코드 경로가 생길 때 한다.** 읽지 않는 자산의 경로를 미리 고치면 그것이 옳은지 검증할 실행이 없다. phase 4의 대상은 둘이다.
+**적용은 그 자산을 실제로 읽는 코드 경로가 생길 때 한다.** 읽지 않는 자산의 경로를 미리 고치면 그것이 옳은지 검증할 실행이 없다. phase 4가 둘(`survey-rules.json`·`templates/METHOD.md`), phase 5가 하나(vitest 바이너리)를 다룬다.
 
-| 자산 | phase 4가 읽는가 | 해법 |
+| 자산 | 언제 읽는가 | 해법 |
 |---|---|---|
-| `survey-rules.json` | `survey` | **모듈 import** — 경로 해석 자체를 없앤다 |
-| `templates/METHOD.md` | `init` | 설치 위치 해석 (`init` 전용) |
+| `survey-rules.json` | `survey`(phase 4) | **모듈 import** — 경로 해석 자체를 없앤다 |
+| `templates/METHOD.md` | `init`(phase 4) | 설치 위치 해석 (`init` 전용) |
+| vitest 바이너리 | `verify`의 게이트 실행(phase 5) | 설치 위치 해석 (`process.getBuiltinModule("module").createRequire`) |
 | 씨앗 `catalog/` | 아니오 (CLI는 카탈로그를 읽지 않는다) | 유예 |
 | 자기검증 fixture | 아니오 (`generative` 전용 · ADR-023) | 유예 |
 

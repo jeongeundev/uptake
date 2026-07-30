@@ -6,11 +6,14 @@ import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { detectBindings } from "@/lib/engine/detect";
+import type { BindingDetection } from "@/lib/engine/detect";
 import { instantiate } from "@/lib/engine/instantiate";
 import {
   executeVerification,
+  hashBindings,
   hashGenerated,
   prepareVerification,
+  vitestBin,
   type PreparedVerification,
 } from "@/lib/engine/verify";
 import { runGate } from "@/services/gate-runner";
@@ -171,7 +174,10 @@ describe("executeVerification", () => {
     }
     const outcome = await executeVerification(prepared);
 
-    expect(outcome).toMatchObject({ status: "injection-failed" });
+    expect(outcome).toMatchObject({
+      status: "injection-failed",
+      positiveLog: "/logs/positive.log",
+    });
     expect(mockedRunGate).toHaveBeenCalledTimes(1);
   });
 
@@ -215,7 +221,11 @@ describe("executeVerification", () => {
 
     await expect(
       executeVerification(prepare()),
-    ).resolves.toMatchObject({ status });
+    ).resolves.toMatchObject({
+      status,
+      positiveLog: "/logs/positive.log",
+      negativeLog: negative.logPath,
+    });
   });
 
   it.each([
@@ -234,7 +244,7 @@ describe("executeVerification", () => {
 
     await expect(
       executeVerification(prepare()),
-    ).resolves.toMatchObject({ status });
+    ).resolves.toMatchObject({ status, positiveLog: positive.logPath });
   });
 
   it("reports negative-not-caught when the injected violation stays green", async () => {
@@ -244,7 +254,11 @@ describe("executeVerification", () => {
 
     await expect(
       executeVerification(prepare()),
-    ).resolves.toMatchObject({ status: "negative-not-caught" });
+    ).resolves.toMatchObject({
+      status: "negative-not-caught",
+      positiveLog: "/logs/positive.log",
+      negativeLog: "/logs/negative.log",
+    });
   });
 
   it("requires the oracle test itself to pass in the positive run", async () => {
@@ -256,7 +270,10 @@ describe("executeVerification", () => {
 
     await expect(
       executeVerification(prepare()),
-    ).resolves.toMatchObject({ status: "positive-failed" });
+    ).resolves.toMatchObject({
+      status: "positive-failed",
+      positiveLog: "/logs/positive.log",
+    });
     expect(mockedRunGate).toHaveBeenCalledTimes(1);
   });
 
@@ -288,5 +305,49 @@ describe("hashGenerated", () => {
         instantiated.files[1],
       ]),
     ).not.toBe(original);
+  });
+});
+
+describe("hashBindings", () => {
+  const detected: BindingDetection = {
+    bindingId: "checker",
+    kind: "checker",
+    status: "detected",
+    value: "vitest",
+    evidence: [{ path: "package.json" }],
+  };
+  const userProvided: BindingDetection = {
+    bindingId: "spec-format",
+    kind: "spec-format",
+    status: "user-provided",
+    value: "markdown",
+  };
+  const unresolved: BindingDetection = {
+    bindingId: "naming",
+    kind: "naming",
+    status: "binding-unresolved",
+  };
+
+  it("is order-independent and changes when a value changes", () => {
+    const original = hashBindings([detected, userProvided, unresolved]);
+
+    expect(hashBindings([unresolved, detected, userProvided])).toBe(original);
+    expect(
+      hashBindings([{ ...detected, value: "jest" }, userProvided, unresolved]),
+    ).not.toBe(original);
+  });
+
+  it("ignores detection evidence, since approval covers values and not how they were found", () => {
+    const original = hashBindings([detected]);
+    expect(
+      hashBindings([{ ...detected, evidence: [{ path: "other.json" }] }]),
+    ).toBe(original);
+  });
+});
+
+describe("vitestBin", () => {
+  it("resolves to a real file inside this installation's node_modules", () => {
+    expect(existsSync(vitestBin)).toBe(true);
+    expect(vitestBin.startsWith(resolve("node_modules"))).toBe(true);
   });
 });

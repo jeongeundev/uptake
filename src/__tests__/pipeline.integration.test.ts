@@ -13,18 +13,14 @@ import { dirname, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { loadCatalog } from "@/lib/catalog/load";
-import { applyGenerated, hashTargetBase } from "@/lib/engine/apply";
+import { applyGenerated, hashTargetBase, type ApprovalInput } from "@/lib/engine/apply";
 import { detectBindings } from "@/lib/engine/detect";
 import { instantiate } from "@/lib/engine/instantiate";
 import {
   executeVerification,
+  hashBindings,
   prepareVerification,
 } from "@/lib/engine/verify";
-import {
-  __resetApprovalStoreForTests,
-  approveVerification,
-  createApproval,
-} from "@/services/approval-store";
 import type { Pattern } from "@/types/pattern";
 
 const temporaryRoots: string[] = [];
@@ -144,7 +140,6 @@ function gitStatus(root: string): string {
 }
 
 afterEach(() => {
-  __resetApprovalStoreForTests();
   for (const root of temporaryRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true });
   }
@@ -217,39 +212,26 @@ describe("catalog to verification and apply pipeline", () => {
       throw new Error(`pipeline verification failed: ${verified.detail}`);
     }
 
-    const createVerifiedApproval = () => {
-      const verificationId = createApproval({
-        patternId: loaded.pattern.patternId,
-        targetRepoRoot: targetRoot,
-        contentHash: verified.contentHash,
-        targetBaseHash: hashTargetBase(targetRoot),
-        frozenArgv: verified.frozenArgv,
-      });
-      return verificationId;
+    const approval: ApprovalInput = {
+      patternId: loaded.pattern.patternId,
+      targetRepoRoot: targetRoot,
+      contentHash: verified.contentHash,
+      bindingsHash: hashBindings(bindings),
+      targetBaseHash: hashTargetBase(targetRoot),
+      frozenArgv: verified.frozenArgv,
     };
     const changedFiles = generated.files.map((file, index) =>
       index === 0 ? { ...file, content: `${file.content}\nchanged` } : file,
     );
-    const changedVerificationId = createVerifiedApproval();
-    expect(approveVerification(changedVerificationId)).toEqual({ ok: true });
     expect(
-      applyGenerated(changedVerificationId, changedFiles, targetRoot),
+      applyGenerated(approval, changedFiles, bindings, targetRoot),
     ).toMatchObject({ status: "diff-mismatch" });
     expect(
       generated.files.every(({ path }) => !existsSync(resolve(targetRoot, path))),
     ).toBe(true);
 
-    const verificationId = createVerifiedApproval();
     expect(
-      applyGenerated(verificationId, generated.files, targetRoot),
-    ).toMatchObject({ status: "not-approved" });
-    expect(
-      generated.files.every(({ path }) => !existsSync(resolve(targetRoot, path))),
-    ).toBe(true);
-
-    expect(approveVerification(verificationId)).toEqual({ ok: true });
-    expect(
-      applyGenerated(verificationId, generated.files, targetRoot),
+      applyGenerated(approval, generated.files, bindings, targetRoot),
     ).toEqual({
       status: "completed",
       written: generated.files.map(({ path }) => path),

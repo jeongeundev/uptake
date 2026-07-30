@@ -8,6 +8,7 @@ import {
   applyGenerated,
   hashTargetBase,
   type ApplyResult,
+  type ApprovalInput,
 } from "@/lib/engine/apply";
 import {
   detectBindings,
@@ -21,12 +22,14 @@ import {
 } from "@/lib/engine/instantiate";
 import {
   executeVerification,
+  hashBindings,
   prepareVerification,
   type PreparedVerification,
   type VerifyOutcome,
 } from "@/lib/engine/verify";
 import {
   approveVerification,
+  consumeApproved,
   createApproval,
 } from "@/services/approval-store";
 import { DEFAULT_GATE_TIMEOUT_MS } from "@/services/gate-runner";
@@ -264,6 +267,7 @@ export async function executeWorkflow(
       patternId: workflow.pattern.patternId,
       targetRepoRoot: workflow.targetRepoRoot,
       contentHash: outcome.contentHash,
+      bindingsHash: hashBindings(workflow.bindings),
       targetBaseHash: hashTargetBase(workflow.targetRepoRoot),
       frozenArgv: outcome.frozenArgv,
     });
@@ -302,9 +306,22 @@ export function applyWorkflow(
   ) {
     return { status: "not-approved", detail: "workflow is not approved" };
   }
+  const consumed = consumeApproved(workflow.verificationId);
+  if (!consumed.ok) {
+    return { status: "not-approved", detail: consumed.reason };
+  }
+  const approval: ApprovalInput = {
+    patternId: consumed.approval.patternId,
+    targetRepoRoot: consumed.approval.targetRepoRoot,
+    contentHash: consumed.approval.contentHash,
+    bindingsHash: consumed.approval.bindingsHash,
+    targetBaseHash: consumed.approval.targetBaseHash,
+    frozenArgv: consumed.approval.frozenArgv,
+  };
   const result = applyGenerated(
-    workflow.verificationId,
+    approval,
     workflow.generated.files,
+    workflow.bindings,
     workflow.targetRepoRoot,
   );
   if (result.status === "completed") {

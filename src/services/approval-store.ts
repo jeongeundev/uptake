@@ -4,6 +4,7 @@ export type StoredApproval = {
   patternId: string;
   targetRepoRoot: string;
   contentHash: string;
+  bindingsHash: string;
   targetBaseHash: string;
   frozenArgv: string[];
   status: "pending" | "approved" | "consumed";
