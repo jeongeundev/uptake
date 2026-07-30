@@ -37,7 +37,10 @@
     {
       "step": 4,
       "name": "relay-integration",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-07-30T09:40:55+0900",
+      "summary": "workflow-relay.integration.test.ts를 확장해 CLI 저작 패턴이 verify에서 층 2 게이트에 닿지 못하고 bindings-unresolved(exit 2)로 정직하게 막히는 것(SURVEY 채택 패턴은 bindingPoints가 비어 있어 generation-blocked 자체가 도달 불가함을 실측으로 확인)과 apply가 성공한 검증 없이 거부되는 것을 검증하고, src/__tests__/workflow-verify-apply.integration.test.ts를 신설해 catalog 씨앗 패턴에 소스 2개를 대조 결속한 실제 generative/corroborated 패턴으로 verify(별도 tsx 프로세스, 저장소 밖 cwd)가 실제 게이트(양성 green/음성 red)를 돌려 verify.json·generated.json·logs를 남기고, apply가 승인 포트 주입(비TTY 프로세스 exit 2 + in-process confirm 참/거짓)으로 재적용 차단 두 겹(consumption seal, base-changed)까지 관통시킴을 증명했다.",
+      "completed_at": "2026-07-30T09:50:48+0900"
     }
   ],
   "created_at": "2026-07-30T08:44:30+0900"
