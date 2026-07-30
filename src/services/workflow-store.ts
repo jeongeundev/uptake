@@ -1,13 +1,12 @@
-import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { accessSync, constants, readFileSync } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
+import { resolve } from "node:path";
 
 import { loadCatalog, type CatalogLoadResult } from "@/lib/catalog/load";
 import {
   applyGenerated,
   hashTargetBase,
   type ApplyResult,
+  type ApprovalInput,
 } from "@/lib/engine/apply";
 import {
   detectBindings,
@@ -19,14 +18,17 @@ import {
   type GeneratedFile,
   type InstantiateResult,
 } from "@/lib/engine/instantiate";
+import { targetEligibility } from "@/lib/engine/target";
 import {
   executeVerification,
+  hashBindings,
   prepareVerification,
   type PreparedVerification,
   type VerifyOutcome,
 } from "@/lib/engine/verify";
 import {
   approveVerification,
+  consumeApproved,
   createApproval,
 } from "@/services/approval-store";
 import { DEFAULT_GATE_TIMEOUT_MS } from "@/services/gate-runner";
@@ -93,35 +95,6 @@ function clearDownstream(workflow: Workflow): void {
   workflow.prepared = undefined;
   workflow.outcome = undefined;
   workflow.verificationId = undefined;
-}
-
-function targetEligibility(targetRepoRoot: string): string | undefined {
-  if (!isAbsolute(targetRepoRoot)) {
-    return "target path must be absolute";
-  }
-  try {
-    accessSync(targetRepoRoot, constants.R_OK);
-    JSON.parse(readFileSync(resolve(targetRepoRoot, "package.json"), "utf8"));
-  } catch {
-    return "target must contain a readable package.json";
-  }
-  try {
-    const worktree = execFileSync(
-      "git",
-      ["rev-parse", "--is-inside-work-tree"],
-      {
-        cwd: targetRepoRoot,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-      },
-    ).trim();
-    if (worktree !== "true") {
-      return "target must be a Git worktree";
-    }
-  } catch {
-    return "target must be a Git worktree";
-  }
-  return undefined;
 }
 
 export function createSession(): string {
@@ -264,6 +237,7 @@ export async function executeWorkflow(
       patternId: workflow.pattern.patternId,
       targetRepoRoot: workflow.targetRepoRoot,
       contentHash: outcome.contentHash,
+      bindingsHash: hashBindings(workflow.bindings),
       targetBaseHash: hashTargetBase(workflow.targetRepoRoot),
       frozenArgv: outcome.frozenArgv,
     });
@@ -302,9 +276,22 @@ export function applyWorkflow(
   ) {
     return { status: "not-approved", detail: "workflow is not approved" };
   }
+  const consumed = consumeApproved(workflow.verificationId);
+  if (!consumed.ok) {
+    return { status: "not-approved", detail: consumed.reason };
+  }
+  const approval: ApprovalInput = {
+    patternId: consumed.approval.patternId,
+    targetRepoRoot: consumed.approval.targetRepoRoot,
+    contentHash: consumed.approval.contentHash,
+    bindingsHash: consumed.approval.bindingsHash,
+    targetBaseHash: consumed.approval.targetBaseHash,
+    frozenArgv: consumed.approval.frozenArgv,
+  };
   const result = applyGenerated(
-    workflow.verificationId,
+    approval,
     workflow.generated.files,
+    workflow.bindings,
     workflow.targetRepoRoot,
   );
   if (result.status === "completed") {

@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -15,7 +16,12 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { validatePatternValue } from "@/lib/catalog/load";
-import type { AuthoringArtifact, SurveyArtifact } from "@/workflow/artifacts";
+import type {
+  AuthoringArtifact,
+  BindingsArtifact,
+  SurveyArtifact,
+  VerifyArtifact,
+} from "@/workflow/artifacts";
 
 // This test proves the relay survives a process boundary: each CLI command
 // below is a separate `tsx` child process, not an in-process function call.
@@ -212,9 +218,7 @@ describe("workflow relay: init -> survey -> author across process boundaries", (
       expect(contentAfterFirst).toContain(
         "init → survey → author → verify → apply",
       );
-      expect(contentAfterFirst).toContain(
-        "현재 배포된 명령은 `init` · `survey` · `author`다.",
-      );
+      expect(contentAfterFirst).toContain("다섯 단계가 모두 배포됐다.");
     },
     CLI_TIMEOUT_MS,
   );
@@ -306,6 +310,82 @@ describe("workflow relay: init -> survey -> author across process boundaries", (
   );
 
   it(
+    "verify never reaches generation for a CLI-authored pattern (ADR-023: descriptive/observed only)",
+    () => {
+      // CLI `author` only ever produces descriptive/observed patterns
+      // adopted straight from a SURVEY candidate, and per ADR-017 those
+      // patterns carry an empty `bindingPoints` (a single-source observation
+      // has no distinguishing binding points to declare yet). `detectBindings`
+      // maps over `pattern.bindingPoints`, so it returns `[]` here — there is
+      // no "checker" or "gate-location" entry to find at all. `verify`'s
+      // binding-resolution hard stop (src/workflow/steps/verify.ts) therefore
+      // fires as "bindings-unresolved" before `instantiate` is ever called,
+      // so the pattern-level "generation-blocked" check inside `instantiate`
+      // is unreachable from this path. Both outcomes mean the same thing —
+      // no gate ever runs for a CLI-authored pattern — this fixes the actual
+      // one so the assertion doesn't silently drift from behavior.
+      const targetRoot = makeTempDir("uptake-relay-target-");
+      cpSync(resolve(repoRoot, "tests/fixtures/target-vitest"), targetRoot, {
+        recursive: true,
+      });
+      commitRepository(targetRoot, "fixture target");
+
+      const result = runUptake(["verify", "--target", targetRoot], {
+        cwd: projectRoot,
+        env,
+      });
+      expect(result.exitCode).toBe(2);
+
+      const runId = readFileSync(
+        resolve(projectRoot, ".uptake/runs/current"),
+        "utf8",
+      ).trim();
+      const verify = JSON.parse(
+        readFileSync(
+          resolve(projectRoot, ".uptake/runs", runId, "verify.json"),
+          "utf8",
+        ),
+      ) as VerifyArtifact;
+      expect(verify.status).toBe("bindings-unresolved");
+
+      const bindings = JSON.parse(
+        readFileSync(
+          resolve(projectRoot, ".uptake/runs", runId, "bindings.json"),
+          "utf8",
+        ),
+      ) as BindingsArtifact;
+      expect(bindings.bindings).toEqual([]);
+
+      expect(
+        existsSync(
+          resolve(projectRoot, ".uptake/runs", runId, "generated.json"),
+        ),
+      ).toBe(false);
+    },
+    CLI_TIMEOUT_MS,
+  );
+
+  it(
+    "apply refuses to run without a successful verification to consume",
+    () => {
+      const runId = readFileSync(
+        resolve(projectRoot, ".uptake/runs/current"),
+        "utf8",
+      ).trim();
+
+      // execFileSync gives the child a piped (non-TTY) stdin, so this also
+      // exercises the TTY guard (ADR-022) — either way apply must not proceed.
+      const result = runUptake(["apply"], { cwd: projectRoot, env });
+
+      expect(result.exitCode).toBe(2);
+      expect(
+        existsSync(resolve(projectRoot, ".uptake/runs", runId, "apply.json")),
+      ).toBe(false);
+    },
+    CLI_TIMEOUT_MS,
+  );
+
+  it(
     "rejects author before survey and points at the missing step",
     () => {
       const freshProjectRoot = makeTempDir("uptake-relay-empty-project-");
@@ -348,15 +428,16 @@ describe("workflow relay: init -> survey -> author across process boundaries", (
   );
 
   it(
-    "rejects commands that are not yet deployed, listing the available ones",
+    "rejects commands that are not known, listing the available ones",
     () => {
-      for (const command of ["verify", "apply", "nonexistent"]) {
-        const result = runUptake([command], { cwd: projectRoot, env });
-        expect(result.exitCode).toBe(2);
-        expect(result.stderr).toContain("init");
-        expect(result.stderr).toContain("survey");
-        expect(result.stderr).toContain("author");
-      }
+      // All five commands are deployed as of this phase (apply is exercised
+      // in its own suite — src/workflow/steps/apply.test.ts); only a
+      // genuinely unknown command belongs here.
+      const result = runUptake(["nonexistent"], { cwd: projectRoot, env });
+      expect(result.exitCode).toBe(2);
+      expect(result.stderr).toContain("init");
+      expect(result.stderr).toContain("survey");
+      expect(result.stderr).toContain("author");
     },
     CLI_TIMEOUT_MS,
   );

@@ -65,10 +65,27 @@ export type VerifyOutcome =
         | "timeout";
       detail: string;
       frozenArgv?: string[];
+      positiveLog?: string;
+      negativeLog?: string;
     };
 
 const execFileAsync = promisify(execFile);
-const vitestBin = resolve("node_modules/vitest/vitest.mjs");
+// 게이트가 실행하는 vitest는 uptake 동봉 자산이므로 설치 위치에서 해석한다.
+// cwd 기준으로 풀면 CLI가 사용자 저장소에서 도는 순간 없는 경로가 된다(ADR-024).
+// `import { createRequire } from "node:module"` 정적 import는 쓰지 않는다 —
+// Next.js(webpack)가 그 바인딩을 정적으로 특수 처리해 결과를 `undefined`나
+// 항상 실패하는 스텁으로 접어버린다(실측: 서버 라우트 빌드에서 재현됨).
+// `process.getBuiltinModule`은 런타임 값 접근이라 그 특수 처리 대상이 아니다.
+const moduleBuiltin = process.getBuiltinModule("module") as
+  | typeof import("node:module")
+  | undefined;
+const resolveFromInstallation = moduleBuiltin?.createRequire(
+  import.meta.url,
+).resolve;
+if (resolveFromInstallation === undefined) {
+  throw new Error("the node:module builtin is unavailable");
+}
+export const vitestBin = resolveFromInstallation("vitest/vitest.mjs");
 
 function inside(root: string, path: string): boolean {
   const fromRoot = relative(root, path);
@@ -206,6 +223,25 @@ export function hashGenerated(files: GeneratedFile[]): string {
   return hash.digest("hex");
 }
 
+// bindingsHash는 contentHash로 대체되지 않는다 — 현재 instantiate는 바인딩 중
+// checker만 읽으므로 spec-format·naming을 바꿔도 생성물이 한 바이트도 변하지
+// 않는다(ARCHITECTURE.md 'verify → apply 결속'). evidence(탐지 근거 경로)는
+// 승인 대상이 아니므로(무엇을 심는지가 아니라 어디서 탐지했는지) 해시에 넣지 않는다.
+export function hashBindings(bindings: BindingDetection[]): string {
+  const hash = createHash("sha256");
+  for (const binding of [...bindings].sort((left, right) =>
+    left.bindingId.localeCompare(right.bindingId),
+  )) {
+    const value = binding.status === "binding-unresolved" ? "" : binding.value;
+    for (const part of [binding.bindingId, binding.kind, binding.status, value]) {
+      hash.update(String(Buffer.byteLength(part)));
+      hash.update(":");
+      hash.update(part);
+    }
+  }
+  return hash.digest("hex");
+}
+
 export function prepareVerification(
   pattern: Pattern,
   generated: Generated,
@@ -287,6 +323,7 @@ export async function executeVerification(
         status: errorStatus(positive),
         detail: positive.detail,
         frozenArgv,
+        positiveLog: positive.logPath,
       };
     }
     if (positive.perTest[gateTestId] !== "passed") {
@@ -294,6 +331,7 @@ export async function executeVerification(
         status: "positive-failed",
         detail: `gate test ${gateTestId} did not pass`,
         frozenArgv,
+        positiveLog: positive.logPath,
       };
     }
 
@@ -313,6 +351,7 @@ export async function executeVerification(
         detail:
           error instanceof Error ? error.message : "violation injection failed",
         frozenArgv,
+        positiveLog: positive.logPath,
       };
     }
 
@@ -326,6 +365,8 @@ export async function executeVerification(
         status: errorStatus(negative),
         detail: negative.detail,
         frozenArgv,
+        positiveLog: positive.logPath,
+        negativeLog: negative.logPath,
       };
     }
     if (negative.perTest[gateTestId] === "passed") {
@@ -333,6 +374,8 @@ export async function executeVerification(
         status: "negative-not-caught",
         detail: `gate test ${gateTestId} still passed after injection`,
         frozenArgv,
+        positiveLog: positive.logPath,
+        negativeLog: negative.logPath,
       };
     }
     if (negative.perTest[gateTestId] !== "failed") {
@@ -340,6 +383,8 @@ export async function executeVerification(
         status: "gate-error",
         detail: `gate test ${gateTestId} was absent from the negative report`,
         frozenArgv,
+        positiveLog: positive.logPath,
+        negativeLog: negative.logPath,
       };
     }
 

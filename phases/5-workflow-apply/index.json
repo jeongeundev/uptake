@@ -1,0 +1,54 @@
+{
+  "project": "uptake",
+  "phase": "5-workflow-apply",
+  "steps": [
+    {
+      "step": 0,
+      "name": "engine-cli-readiness",
+      "status": "completed",
+      "started_at": "2026-07-30T08:44:30+0900",
+      "summary": "applyGenerated를 승인 저장소 어휘 없는 순수 함수(ApprovalInput·bindings 인자)로 바꾸고 bindingsHash 3중 대조를 추가했으며(hashBindings 신설), vitest 바이너리 해석을 cwd 기준에서 설치 위치 기준(process.getBuiltinModule(\"module\").createRequire — 정적 createRequire import는 Next.js 웹팩 빌드가 특수 처리해 무력화되므로 우회)으로 바꾸고, VerifyOutcome 실패 분기에 positiveLog·negativeLog를 실었다. 웹 배선(workflow-store·approval-store)이 새 시그니처를 흡수하도록 갱신했다.",
+      "completed_at": "2026-07-30T09:11:52+0900"
+    },
+    {
+      "step": 1,
+      "name": "verify-artifacts",
+      "status": "completed",
+      "started_at": "2026-07-30T09:11:52+0900",
+      "summary": "artifacts.ts에 bindings/generated/verify/apply 산출물 읽기·쓰기와 writeRunLog/runLogPath를 추가하고, prerequisites.ts에 authoringState·verifyState·applyState 3-상태 판정을 추가했으며, targetEligibility를 workflow-store.ts에서 src/lib/engine/target.ts로 순수 이동했다.",
+      "completed_at": "2026-07-30T09:18:58+0900"
+    },
+    {
+      "step": 2,
+      "name": "cli-verify",
+      "status": "completed",
+      "started_at": "2026-07-30T09:18:58+0900",
+      "summary": "src/workflow/steps/verify.ts를 신설해 authoring.json 소비 직후 validatePatternValue로 층 1을 재검증하고(ADR-025, 파일명은 `${patternId}.json`으로 합성), targetEligibility·detectBindings·instantiate·prepareVerification·executeVerification을 순서대로 걸어 bindings.json·generated.json·verify.json·logs를 기록한다. gate-error/timeout은 exit 3, 나머지 게이트 실패는 exit 1로 분리했다. cli.ts에 verify --target <absolute path>를 배선하고(apply는 여전히 미지의 명령), author.ts 성공 메시지와 templates/METHOD.md의 배포 현황 문구를 갱신했다.",
+      "completed_at": "2026-07-30T09:32:06+0900"
+    },
+    {
+      "step": 3,
+      "name": "cli-apply",
+      "status": "completed",
+      "started_at": "2026-07-30T09:32:06+0900",
+      "summary": "src/workflow/steps/apply.ts를 신설해 verify.json이 고정한 해시 3종(contentHash·bindingsHash·targetBaseHash)을 ApprovalInput으로 그대로 넘겨 applyGenerated를 호출하고, applyState의 verificationId 일치로 재적용을 승인 호출 이전에 차단한다(ADR-022 소비 봉인). cli.ts에 apply를 KNOWN_COMMANDS로 추가하고 stdin이 TTY가 아니면 runApplyCommand를 부르지 않고 exit 2로 막았으며, 기본 승인 프롬프트(promptForApproval)는 readline/promises로 파일 전체 내용·frozenArgv·바인딩을 보인 뒤 y/yes만 승인으로 받는다. verify.ts 성공 메시지와 templates/METHOD.md를 다섯 단계 전체 배포로 갱신하고, 이에 따라 무효화된 cli.test.ts·workflow-relay.integration.test.ts의 기존 단언을 새 동작에 맞춰 교체했다.",
+      "completed_at": "2026-07-30T09:40:55+0900"
+    },
+    {
+      "step": 4,
+      "name": "relay-integration",
+      "status": "completed",
+      "started_at": "2026-07-30T09:40:55+0900",
+      "summary": "workflow-relay.integration.test.ts를 확장해 CLI 저작 패턴이 verify에서 층 2 게이트에 닿지 못하고 bindings-unresolved(exit 2)로 정직하게 막히는 것(SURVEY 채택 패턴은 bindingPoints가 비어 있어 generation-blocked 자체가 도달 불가함을 실측으로 확인)과 apply가 성공한 검증 없이 거부되는 것을 검증하고, src/__tests__/workflow-verify-apply.integration.test.ts를 신설해 catalog 씨앗 패턴에 소스 2개를 대조 결속한 실제 generative/corroborated 패턴으로 verify(별도 tsx 프로세스, 저장소 밖 cwd)가 실제 게이트(양성 green/음성 red)를 돌려 verify.json·generated.json·logs를 남기고, apply가 승인 포트 주입(비TTY 프로세스 exit 2 + in-process confirm 참/거짓)으로 재적용 차단 두 겹(consumption seal, base-changed)까지 관통시킴을 증명했다.",
+      "completed_at": "2026-07-30T09:52:01+0900"
+    }
+  ],
+  "created_at": "2026-07-30T08:44:30+0900",
+  "final_verify": {
+    "status": "passed",
+    "exit_code": 0,
+    "at": "2026-07-30T09:52:50+0900",
+    "duration_sec": 48
+  },
+  "completed_at": "2026-07-30T09:52:50+0900"
+}

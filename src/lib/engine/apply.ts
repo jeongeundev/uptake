@@ -12,19 +12,27 @@ import {
 } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
+import type { BindingDetection } from "@/lib/engine/detect";
 import type { GeneratedFile } from "@/lib/engine/instantiate";
-import { hashGenerated } from "@/lib/engine/verify";
-import { consumeApproved } from "@/services/approval-store";
+import { hashBindings, hashGenerated } from "@/lib/engine/verify";
+
+export type ApprovalInput = {
+  patternId: string;
+  targetRepoRoot: string;
+  contentHash: string;
+  bindingsHash: string;
+  targetBaseHash: string;
+  frozenArgv: string[];
+};
 
 export type ApplyResult =
   | { status: "completed"; written: string[] }
   | {
       status:
         | "diff-mismatch"
-        | "apply-failed"
+        | "bindings-mismatch"
         | "base-changed"
-        | "not-approved"
-        | "unknown-approval";
+        | "apply-failed";
       detail: string;
     };
 
@@ -68,22 +76,11 @@ export function hashTargetBase(targetRepoRoot: string): string {
 }
 
 export function applyGenerated(
-  verificationId: string,
+  approval: ApprovalInput,
   files: GeneratedFile[],
+  bindings: BindingDetection[],
   targetRepoRoot: string,
 ): ApplyResult {
-  const consumed = consumeApproved(verificationId);
-  if (!consumed.ok) {
-    return {
-      status:
-        consumed.reason === "unknown-approval"
-          ? "unknown-approval"
-          : "not-approved",
-      detail: consumed.reason,
-    };
-  }
-
-  const { approval } = consumed;
   const root = resolve(targetRepoRoot);
   if (
     approval.targetRepoRoot !== targetRepoRoot ||
@@ -92,6 +89,13 @@ export function applyGenerated(
     return {
       status: "diff-mismatch",
       detail: "generated files do not match the verified approval",
+    };
+  }
+
+  if (hashBindings(bindings) !== approval.bindingsHash) {
+    return {
+      status: "bindings-mismatch",
+      detail: "bindings do not match the verified approval",
     };
   }
 

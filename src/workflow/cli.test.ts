@@ -31,9 +31,33 @@ describe("runCli", () => {
     expect(outcome.stderr.join("\n")).toContain("init");
   });
 
-  it("does not know about verify or apply as commands", async () => {
-    expect((await runCli(["verify"], root)).exitCode).toBe(2);
-    expect((await runCli(["apply"], root)).exitCode).toBe(2);
+  it("blocks apply without prompting when stdin is not a TTY", async () => {
+    const originalIsTTY = process.stdin.isTTY;
+    process.stdin.isTTY = false;
+    try {
+      const outcome = await runCli(["apply"], root);
+
+      expect(outcome.exitCode).toBe(2);
+      expect(outcome.stderr.join("\n")).toContain("TTY");
+    } finally {
+      process.stdin.isTTY = originalIsTTY;
+    }
+  });
+
+  it("exits 2 with a usage message when verify is missing --target", async () => {
+    const outcome = await runCli(["verify"], root);
+
+    expect(outcome.exitCode).toBe(2);
+    expect(outcome.stderr.join("\n")).toContain(
+      "uptake verify --target <absolute path>",
+    );
+  });
+
+  it("exits 2 when verify's --target is not an absolute path", async () => {
+    const outcome = await runCli(["verify", "--target", "relative/path"], root);
+
+    expect(outcome.exitCode).toBe(2);
+    expect(outcome.stderr.join("\n")).toContain("absolute path");
   });
 
   it("runs init and exits 0, creating METHOD.md", async () => {

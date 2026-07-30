@@ -11,6 +11,7 @@ const input = {
   patternId: "pattern",
   targetRepoRoot: "/target",
   contentHash: "content",
+  bindingsHash: "bindings",
   targetBaseHash: "base",
   frozenArgv: ["vitest", "run"],
 };
