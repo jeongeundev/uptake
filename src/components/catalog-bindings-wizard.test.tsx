@@ -302,4 +302,15 @@ describe("verify and apply UI", () => {
     expect(rejected).toContain("diff-mismatch");
     expect(rejected).toContain("verified content changed");
   });
+
+  it("renders bindings-mismatch, the third hash rejection the engine can return", () => {
+    const markup = renderToStaticMarkup(
+      <ApplyResultView
+        result={{ status: "bindings-mismatch", detail: "resolved bindings changed" }}
+      />,
+    );
+
+    expect(markup).toContain("bindings-mismatch");
+    expect(markup).toContain("resolved bindings changed");
+  });
 });
